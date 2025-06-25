@@ -7,6 +7,7 @@ export default {
 <template>
   <div>
     <nav>
+      <router-link to="/dashboard">实时监控</router-link> |
       <router-link to="/status">状态监控</router-link> |
       <router-link to="/rules">规则管理</router-link> |
       <router-link to="/logs">日志记录</router-link>

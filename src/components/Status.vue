@@ -99,67 +99,47 @@ export default {
     const topIp = ref([])
     const tcpConnections = ref([])
 
-    // API请求函数
-    const fetchData = async () => {
+    const fetchStatus = async () => {
       try {
-        loading.value = true
-        
-        // 假设API端点路径如下（根据实际API修改）
-        const endpoints = {
-          status: '/api/status',
-          rules: '/api/rules/matches',
-          topip: '/api/top-ip',
-          tcp: '/api/tcp-connections'
-        }
-
-        // 并发请求所有数据
-        const [statusRes, rulesRes, topipRes, tcpRes] = await Promise.all([
-          axios.get(endpoints.status),
-          axios.get(endpoints.rules),
-          axios.get(endpoints.topip),
-          axios.get(endpoints.tcp)
-        ])
-
-        // 更新数据，请求到的数据分别赋值给对应响应式数据
-        status.value = statusRes.data
-        ruleMatches.value = rulesRes.data
-        topIp.value = topipRes.data
-        tcpConnections.value = tcpRes.data
-
-      }
-      // 捕获过程错误处理
-      catch (error)
-      {
-        console.error('API请求失败:', error)
-        ElMessage.error('数据加载失败: ' + (error.response?.data?.message || error.message))
-      }
-      finally
-      {
-        loading.value = false
+        const response = await axios.get('http://localhost:3000/status/')
+        status.value = response.data
+      } catch (error) {
+        console.error('获取状态失败:', error)
       }
     }
 
-    // 轮询函数
-    const startPolling = () => {
-      // 每30秒刷新一次数据(执行 fetchData)
-      const interval = setInterval(fetchData, 30000) /* 定时器 ID */
-      
-      // 组件卸载时清除定时器
-      onUnmounted(() => {
-        clearInterval(interval)
-      })
+    const fetchRuleMatches = async () => {
+      try {
+        const response = await axios.get('http://localhost:3000/status/rule_match?page=1')
+        ruleMatches.value = response.data.matches || []
+      } catch (error) {
+        console.error('获取规则匹配失败:', error)
+      }
     }
 
-    // onMounted(() => {
-    //   fetchData()
-    //   startPolling()
-    // })
-    // 临时使用模拟数据测试
+    const fetchTopIp = async () => {
+      try {
+        const response = await axios.get('http://localhost:3000/status/top_ip?col=bytes')
+        topIp.value = response.data.top || []
+      } catch (error) {
+        console.error('获取Top IP失败:', error)
+      }
+    }
+
+    const fetchTcpConnections = async () => {
+      try {
+        const response = await axios.get('http://localhost:3000/status/tcp_connections')
+        tcpConnections.value = response.data.connections || []
+      } catch (error) {
+        console.error('获取TCP连接失败:', error)
+      }
+    }
+
     onMounted(() => {
-      status.value = { pass: 123, abort: 45, drop: 67, bandwidth: 8910 }
-      ruleMatches.value = [{time: '2023-01-01', rule_desc: 'test', src_ip: '1.1.1.1', dst_ip: '2.2.2.2', action: 'pass'}]
-      topIp.value = [{ip: '3.3.3.3', bytes: 1000, packets: 10}]
-      tcpConnections.value = [{src_ip: '4.4.4.4', src_port: 1234, dst_ip: '5.5.5.5', dst_port: 80, state: 'ESTABLISHED'}]
+      fetchStatus()
+      fetchRuleMatches()
+      fetchTopIp()
+      fetchTcpConnections()
       loading.value = false
     })
 

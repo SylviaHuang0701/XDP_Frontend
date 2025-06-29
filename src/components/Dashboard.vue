@@ -198,6 +198,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { DataLine, Connection, Warning, Monitor, InfoFilled, CircleClose } from '@element-plus/icons-vue'
 import axios from 'axios'
+import { API_BASE_URL } from '../config.js'
 
 export default {
   name: 'Dashboard',
@@ -280,7 +281,7 @@ export default {
     // API 请求函数
     const fetchStats = async () => {
       try {
-        const response = await axios.get('http://localhost:3000/status/')
+        const response = await axios.get(`${API_BASE_URL}/status/`)
         stats.value = {
           ...response.data,
           connections: Math.floor(Math.random() * 1000) + 100, // 模拟数据
@@ -294,7 +295,7 @@ export default {
     
     const fetchTopIp = async () => {
       try {
-        const response = await axios.get('http://localhost:3000/status/top_ip?col=bytes')
+        const response = await axios.get(`${API_BASE_URL}/status/top_ip?col=bytes`)
         topIpList.value = response.data.top || []
       } catch (error) {
         console.error('获取Top IP失败:', error)
@@ -303,7 +304,7 @@ export default {
     
     const fetchConnections = async () => {
       try {
-        const response = await axios.get('http://localhost:3000/status/tcp_connections')
+        const response = await axios.get(`${API_BASE_URL}/status/tcp_connections`)
         const connections = response.data.connections || []
         
         // 统计连接状态

@@ -125,9 +125,13 @@
         <el-form-item label="规则描述" prop="desc">
           <el-input v-model="ruleForm.desc" placeholder="请输入规则描述" />
         </el-form-item>
-        <el-form-item label="源IP" prop="src_ip">
-          <el-input v-model="ruleForm.src_ip" 
+        <el-form-item label="源IP" prop="src_ip_start">
+          <el-input v-model="ruleForm.src_ip_start" 
           placeholder="例如: 192.168.1.0/24, 10.0.0.1-10.0.0.100 或 any" />
+        </el-form-item>
+        <el-form-item label="源IP结束" prop="src_ip_end">
+          <el-input v-model="ruleForm.src_ip_end" 
+          placeholder="例如: 192.168.1.100 或 any" />
         </el-form-item>
         <el-form-item label="目的IP" prop="dst_ip">
           <el-input v-model="ruleForm.dst_ip" 
@@ -152,6 +156,18 @@
             <el-radio label="pass">允许</el-radio>
             <el-radio label="drop">拒绝</el-radio>
           </el-radio-group>
+        </el-form-item>
+        <el-form-item label="优先级" prop="priority">
+          <el-input-number v-model="ruleForm.priority" :min="0" :max="1000" />
+        </el-form-item>
+        <el-form-item label="过期时间" prop="expire_at">
+          <el-date-picker
+            v-model="ruleForm.expire_at"
+            type="datetime"
+            placeholder="选择过期时间（可选）"
+            format="YYYY-MM-DD HH:mm:ss"
+            value-format="YYYY-MM-DD HH:mm:ss"
+          />
         </el-form-item>
       </el-form>
       <!-- 表单操作区(取消 / 确认) -->
@@ -270,117 +286,58 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { Search } from "@element-plus/icons-vue";
+import { API_BASE_URL, API_ENDPOINTS } from '../config.js'
 
-// 模拟API对象调用
-const mockApi = {
-  getRules: () => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const mockData = [
-          { 
-            id: 1, 
-            desc: '允许本地访问', 
-            src_ip: '192.168.1.0/24', 
-            dst_ip: 'any', 
-            src_port: 'any',
-            dst_port: 'any',
-            protocol: 'udp',
-            action: 'pass', 
-            created_at: '2023-01-15 10:30:00'
-          },
-          { 
-            id: 2, 
-            desc: '禁止外部访问80端口', 
-            src_ip: 'any', 
-            dst_ip: '192.168.1.100', 
-            src_port: 'any',
-            dst_port: '80',
-            protocol: 'tcp',
-            action: 'drop', 
-            created_at: '2023-01-20 14:15:00'
-          },
-          { 
-            id: 3, 
-            desc: '允许ICMP ping', 
-            src_ip: 'any', 
-            dst_ip: 'any', 
-            src_port: 'any',
-            dst_port: 'any',
-            protocol: 'icmp',
-            action: 'pass', 
-            created_at: '2023-02-01 09:00:00'
-          }
-        ]
-        resolve({ data: mockData })
-      }, 500)
-    })
+const api = {
+  getRules: async (page = 1, pageSize = 20) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.RULES}`, {
+        params: { page, page_size: pageSize }
+      });
+      return response;
+    } catch (error) {
+      console.error('Failed to get rules:', error);
+      throw error;
+    }
   },
-  addRule: (rule) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        rule.id = Math.floor(Math.random() * 1000) + 10
-        rule.created_at = new Date().toLocaleString()
-        resolve({ data: rule })
-      }, 300)
-    })
+  addRule: async (rule) => {
+    const response = await axios.put(`${API_BASE_URL}${API_ENDPOINTS.RULES}`, rule)
+    return response
   },
-  updateRule: (rule) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        resolve({ data: rule })
-      }, 300)
-    })
+  updateRule: async (id, rule) => {
+    const response = await axios.put(`${API_BASE_URL}${API_ENDPOINTS.RULES}/${id}`, rule)
+    return response
   },
-  deleteRule: (id) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        resolve({ success: true })
-      }, 300)
-    })
+  deleteRule: async (id) => {
+    const response = await axios.delete(`${API_BASE_URL}${API_ENDPOINTS.RULES}/${id}`)
+    return response
   },
-  getDefaultRule: () => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        resolve({ data: { action: 'pass', desc: '默认放行所有流量' } })
-      }, 200)
-    })
+  getDefaultRule: async () => {
+    const response = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.RULES_DEFAULT}`)
+    return response
   },
-  saveDefaultRule: (rule) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        resolve({ success: true, data: rule })
-      }, 300)
-    })
+  saveDefaultRule: async (rule) => {
+    const response = await axios.put(`${API_BASE_URL}${API_ENDPOINTS.RULES_DEFAULT}`, rule)
+    return response
   },
-  getExpiredRules: (days) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const mockData = days === 'all' ? [
-          { id: 101, desc: '旧测试规则1', created_at: '2022-12-01 10:00:00' },
-          { id: 102, desc: '旧测试规则2', created_at: '2022-11-15 14:30:00' }
-        ] : days === '7' ? [
-          { id: 103, desc: '上周测试规则', created_at: '2023-01-10 09:15:00' }
-        ] : []
-        resolve({ data: mockData })
-      }, 400)
-    })
+  
+  // 获取过期规则（暂时使用mock，因为后端可能没有这个接口）
+  getExpiredRules: async (days) => {
+    // 暂时返回空数组，因为后端可能没有这个接口
+    return { data: [] }
   },
-  cleanExpiredRules: (days) => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        resolve({ success: true, deleted: days === 'all' ? 2 : 1 })
-      }, 500)
-    })
+  
+  // 清理过期规则（暂时使用mock）
+  cleanExpiredRules: async (days) => {
+    // 暂时返回成功，因为后端可能没有这个接口
+    return { success: true, deleted: 0 }
   }
 }
 
 // 辅助函数：验证单个IP地址
 const isValidIP = (ip) => {
-  // 正则表达式初步验证
   const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/
   if (!ipPattern.test(ip)) return false
-
-  // 每段数字是否在正确范围内
   return ip.split('.').every(segment => {
     const num = parseInt(segment, 10)
     return num >= 0 && num <= 255
@@ -390,7 +347,7 @@ const isValidIP = (ip) => {
 // 添加IP验证方法
 const validateIP = (rule, value) => {
   return new Promise((resolve, reject) => {
-    if (value === 'any') {
+    if (!value || value === 'any') {
       resolve()
       return
     }
@@ -499,17 +456,16 @@ export default {
     const ruleForm = reactive({
       id: 0,
       type: 'ip',
-      desc: 'any',
-      src_ip: 'any',
+      desc: '',
+      src_ip_start: 'any',
+      src_ip_end: 'any',
       dst_ip: 'any',
       src_port: 'any',
       dst_port: 'any',
-      priority: 100,
-      expire_at: '2024-06-02T00:00:00Z',
-      created_at: '2024-06-01T10:00:00Z',
-      updated_at: '2024-06-01T10:00:00Z',
       protocol: 'tcp',
-      action: 'pass'
+      action: 'pass',
+      priority: 100,
+      expire_at: null
     })
     
     // 表单验证规则
@@ -518,8 +474,11 @@ export default {
         { required: true, message: '请输入规则描述', trigger: 'blur' },
         { min: 3, max: 50, message: '长度在3到50个字符', trigger: 'blur' }
       ],
-      src_ip: [
+      src_ip_start: [
         { required: true, message: '请输入源IP', trigger: 'blur' },
+        { validator: validateIP, trigger: 'blur' }
+      ],
+      src_ip_end: [
         { validator: validateIP, trigger: 'blur' }
       ],
       dst_ip: [
@@ -536,6 +495,13 @@ export default {
       ],
       protocol: [
         { required: true, message: '请选择协议', trigger: 'change' }
+      ],
+      action: [
+        { required: true, message: '请选择动作', trigger: 'change' }
+      ],
+      priority: [
+        { required: true, message: '请输入优先级', trigger: 'blur' },
+        { type: 'number', min: 0, max: 1000, message: '优先级范围0-1000', trigger: 'blur' }
       ]
     })
 
@@ -594,9 +560,10 @@ export default {
     const fetchRules = async () => {
       loading.value = true
       try {
-        const response = await mockApi.getRules()
-        rules.value = response.data
-        totalRules.value = response.data.length
+        const response = await api.getRules(currentPage.value, pageSize.value)
+        // 适配后端返回的数据结构
+        rules.value = response.data.rules || response.data || []
+        totalRules.value = response.data.total || response.data.length || 0
       } catch (error) {
         ElMessage.error('获取规则列表失败: ' + error.message)
       } finally {
@@ -607,23 +574,35 @@ export default {
     // 获取默认规则列表数据
     const fetchDefaultRule = async () => {
       try {
-        const response = await mockApi.getDefaultRule()
-        Object.assign(defaultRule, response.data)
+        const response = await api.getDefaultRule()
+        // 适配后端返回的数据结构
+        const defaultRuleData = response.data || { action: 'pass', desc: '默认放行所有流量' }
+        Object.assign(defaultRule, defaultRuleData)
+        Object.assign(ConfirmdefaultRule, defaultRuleData)
       } catch (error) {
         ElMessage.error('获取默认规则失败: ' + error.message)
+        // 设置默认值
+        defaultRule.action = 'pass'
+        defaultRule.desc = '默认放行所有流量'
+        ConfirmdefaultRule.action = 'pass'
+        ConfirmdefaultRule.desc = '默认放行所有流量'
       }
     }
 
     // 定义初始表单数据
     const initialFormState = {
       id: 0,
-      desc: 'any',
-      src_ip: 'any',
+      type: 'ip',
+      desc: '',
+      src_ip_start: 'any',
+      src_ip_end: 'any',
       dst_ip: 'any',
       src_port: 'any',
       dst_port: 'any',
       protocol: 'tcp',
-      action: 'pass'
+      action: 'pass',
+      priority: 100,
+      expire_at: null
     }
 
     // 添加规则
@@ -641,13 +620,17 @@ export default {
       // 使用 Object.assign 更新 reactive 对象
       Object.assign(ruleForm, {
         id: row.id,
+        type: row.type || 'ip',
         desc: row.desc || '',
-        src_ip: row.src_ip || 'any',
+        src_ip_start: row.src_ip || 'any',
+        src_ip_end: row.src_ip || 'any',
         dst_ip: row.dst_ip || 'any',
-        src_port: row.src_port || 'any',  // 修正字段名
-        dst_port: row.dst_port || 'any',  // 修正字段名
+        src_port: row.src_port || 'any',
+        dst_port: row.dst_port || 'any',
         protocol: row.protocol || 'tcp',
-        action: row.action || 'pass'
+        action: row.action || 'pass',
+        priority: row.priority || 100,
+        expire_at: row.expire_at || null
       })
       dialogVisible.value = true
     }
@@ -660,7 +643,7 @@ export default {
         type: 'warning'
       }).then(async () => {
         try {
-          await mockApi.deleteRule(id)
+          await api.deleteRule(id)
           ElMessage.success('删除成功')
           fetchRules()
         } catch (error) {
@@ -682,10 +665,10 @@ export default {
         await ruleFormRef.value.validate()
         
         if (isEdit.value) {
-          await mockApi.updateRule({ id: currentRuleId.value, ...ruleForm })
+          await api.updateRule(currentRuleId.value, ruleForm)
           ElMessage.success('更新成功')
         } else {
-          await mockApi.addRule(ruleForm)
+          await api.addRule(ruleForm)
           ElMessage.success('添加成功')
         }
         
@@ -717,7 +700,7 @@ export default {
 
         ConfirmdefaultRule.action = defaultRule.action
         ConfirmdefaultRule.desc = defaultRule.desc
-        await mockApi.saveDefaultRule(defaultRule)
+        await api.saveDefaultRule(defaultRule)
         ElMessage.success('默认规则保存成功')
       } catch (error) {
         ElMessage.error('保存失败: ' + error.message)
@@ -750,7 +733,7 @@ export default {
     const fetchExpiredRules = async () => {
       blacklistLoading.value = true
       try {
-        const response = await mockApi.getExpiredRules(blacklistForm.expire_days)
+        const response = await api.getExpiredRules(blacklistForm.expire_days)
         expiredRules.value = response.data
       } catch (error) {
         ElMessage.error('获取过期规则失败: ' + error.message)
@@ -774,7 +757,7 @@ export default {
         )
 
         // 执行清除操作
-        const response = await mockApi.cleanExpiredRules(blacklistForm.expire_days)
+        const response = await api.cleanExpiredRules(blacklistForm.expire_days)
         ElMessage.success(`成功清理${response.deleted}条过期规则`)
         fetchExpiredRules()
       } catch (error) {
@@ -793,7 +776,7 @@ export default {
           type: 'warning'
         })
         
-        await mockApi.deleteRule(id)
+        await api.deleteRule(id)
         ElMessage.success('强制删除成功')
         fetchExpiredRules()
       } catch (error) {

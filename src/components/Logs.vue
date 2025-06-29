@@ -33,26 +33,29 @@
       >
         <!-- 时间列 -->
         <!-- Date对象自动转换 ISO 时间为本地格式 -->
-        <el-table-column prop="time" label="时间">
+        <el-table-column prop="timestamp" label="时间">
           <template #default="{ row }">
-            {{ new Date(row.time).toLocaleString() }}
+            {{ new Date(row.timestamp).toLocaleString() }}
           </template>
         </el-table-column>
 
         <!-- 类型列 -->
-        <el-table-column prop="type" label="类型" >
+        <el-table-column prop="level" label="类型" >
           <template #default="{ row }">
             <el-tag
-              :type="row.type === 'pass' ? 'success' : 'danger'"
+              :type="getLogLevelType(row.level)"
               disable-transitions
             >
-              {{ row.type }} <!-- 直接显示原始数据（pass/drop） -->
+              {{ row.level }} <!-- 显示日志级别（INFO, WARNING, ERROR） -->
             </el-tag>
           </template>
         </el-table-column>
         
-        <!-- 内容列---直接显示原始日志内容-->
-        <el-table-column prop="content" label="内容" />
+        <!-- 内容列---显示日志消息-->
+        <el-table-column prop="message" label="内容" />
+        
+        <!-- 来源列---显示日志来源-->
+        <el-table-column prop="source" label="来源" width="120" />
       </el-table>
 
       <!-- 
@@ -77,6 +80,7 @@
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { API_BASE_URL } from '../config.js'
 
 export default {
   name: 'Logs',
@@ -99,7 +103,7 @@ export default {
 
     const fetchLogs = async () => {
       try {
-        let url = 'http://localhost:3000/status/logs'
+        let url = `${API_BASE_URL}/status/logs`
         const params = {}
         
         if (dateRange.value && dateRange.value.length === 2) {
@@ -127,6 +131,19 @@ export default {
       currentPage.value = page
     }
 
+    const getLogLevelType = (level) => {
+      switch (level) {
+        case 'INFO':
+          return 'info'
+        case 'WARNING':
+          return 'warning'
+        case 'ERROR':
+          return 'danger'
+        default:
+          return 'info'
+      }
+    }
+
     onMounted(() => {
       fetchLogs()
     })
@@ -140,7 +157,8 @@ export default {
       handlePageChange,
       totalLogs,
       pageSize,
-      paginatedLogs
+      paginatedLogs,
+      getLogLevelType
     }
   }
 }

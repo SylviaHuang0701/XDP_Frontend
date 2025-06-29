@@ -87,8 +87,9 @@
 
 <script>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
+import { API_BASE_URL } from '../config.js'
 
 export default {
   name: 'Status',
@@ -101,7 +102,7 @@ export default {
 
     const fetchStatus = async () => {
       try {
-        const response = await axios.get('http://localhost:3000/status/')
+        const response = await axios.get(`${API_BASE_URL}/status/`)
         status.value = response.data
       } catch (error) {
         console.error('获取状态失败:', error)
@@ -110,7 +111,7 @@ export default {
 
     const fetchRuleMatches = async () => {
       try {
-        const response = await axios.get('http://localhost:3000/status/rule_match?page=1')
+        const response = await axios.get(`${API_BASE_URL}/status/rule_match?page=1`)
         ruleMatches.value = response.data.matches || []
       } catch (error) {
         console.error('获取规则匹配失败:', error)
@@ -119,7 +120,7 @@ export default {
 
     const fetchTopIp = async () => {
       try {
-        const response = await axios.get('http://localhost:3000/status/top_ip?col=bytes')
+        const response = await axios.get(`${API_BASE_URL}/status/top_ip?col=bytes`)
         topIp.value = response.data.top || []
       } catch (error) {
         console.error('获取Top IP失败:', error)
@@ -128,7 +129,7 @@ export default {
 
     const fetchTcpConnections = async () => {
       try {
-        const response = await axios.get('http://localhost:3000/status/tcp_connections')
+        const response = await axios.get(`${API_BASE_URL}/status/tcp_connections`)
         tcpConnections.value = response.data.connections || []
       } catch (error) {
         console.error('获取TCP连接失败:', error)

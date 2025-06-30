@@ -144,14 +144,14 @@
         <el-form-item label="源端口" prop="src_port">
           <el-input 
             v-model="ruleForm.src_port" 
-            placeholder="例如: 80, 443 或 1-65535" 
+            placeholder="例如: 80 或 1-65535" 
             :disabled="!isPortProtocol"
           />
         </el-form-item>
         <el-form-item label="目标端口" prop="dst_port">
           <el-input 
             v-model="ruleForm.dst_port" 
-            placeholder="例如: 80, 443 或 1-65535" 
+            placeholder="例如: 80 或 1-65535" 
             :disabled="!isPortProtocol"
           />
         </el-form-item>
@@ -416,45 +416,37 @@ const validateIP = (rule, value) => {
 
 const validatePort = (rule, value) => {
   return new Promise((resolve, reject) => {
-    if (!value) {
-      reject(new Error('端口不能为空'))
-      return
+    if (!value || value === 'any') {
+      resolve();
+      return;
     }
-
-    if (value === 'any') {
-      resolve()
-      return
+    if (value.includes(',')) {
+      reject(new Error('不支持逗号分隔多个端口，只能输入单个端口或范围'));
+      return;
     }
-
-    // 端口范围验证
-    const isValid = /^(\d{1,5}(-\d{1,5})?)(,\d{1,5}(-\d{1,5})?)*$/.test(value)
-    if (!isValid) {
-      reject(new Error('格式应为: 80 或 80,443 或 1-65535'))
-      return
-    }
-
-    // 验证每个端口范围
-    const allPorts = value.split(',')
-    for (const port of allPorts) {
-      if (port.includes('-')) {
-        const [start, end] = port.split('-').map(Number)
-        if (start > end || start < 1 || end > 65535) {
-          reject(new Error(`无效范围: ${port}`))
-          return
-        }
-      } else {
-        const num = Number(port)
-        if (num < 1 || num > 65535) {
-          reject(new Error(`无效端口: ${port}`))
-          return
-        }
+    // 单个端口
+    if (/^\d{1,5}$/.test(value)) {
+      const num = parseInt(value, 10);
+      if (num < 1 || num > 65535) {
+        reject(new Error('端口范围应为 1-65535'));
+        return;
       }
+      resolve();
+      return;
     }
-
-    resolve()
-  })
-}
-
+    // 范围
+    if (/^\d{1,5}-\d{1,5}$/.test(value)) {
+      const [start, end] = value.split('-').map(Number);
+      if (start < 1 || end > 65535 || start > end) {
+        reject(new Error('端口范围格式不正确'));
+        return;
+      }
+      resolve();
+      return;
+    }
+    reject(new Error('端口格式应为: 80 或 80-443'));
+  });
+};
 
 const validateProtocol = (rule, value) => {
   return new Promise((resolve, reject) => {
@@ -473,6 +465,46 @@ const validateProtocol = (rule, value) => {
     }
 
   })
+}
+
+// 解析IP/端口范围
+function parseRange(input) {
+  if (!input || input === 'any') return null;
+  if (input.includes('-')) {
+    const [start, end] = input.split('-').map(s => s.trim());
+    return [start, end];
+  }
+  return [input, input];
+}
+function parsePortRange(input) {
+  if (!input || input === 'any') return null;
+  if (input.includes('-')) {
+    const [start, end] = input.split('-').map(s => parseInt(s.trim(), 10));
+    return [start, end];
+  }
+  const port = parseInt(input, 10);
+  return [port, port];
+}
+function buildRulePayload(form) {
+  const payload = {
+    action: form.action,
+    protocol: form.protocol,
+    type: form.type,
+    desc: form.desc,
+  };
+  // IP范围
+  const srcIpRange = parseRange(form.src_ip);
+  if (srcIpRange) payload.ipv4_src = srcIpRange;
+  const dstIpRange = parseRange(form.dst_ip);
+  if (dstIpRange) payload.ipv4_dst = dstIpRange;
+  // 端口范围
+  if (form.protocol && ['tcp', 'udp', '6', '17'].includes(form.protocol.toLowerCase())) {
+    const srcPortRange = parsePortRange(form.src_port);
+    if (srcPortRange) payload.tcp_src = srcPortRange;
+    const dstPortRange = parsePortRange(form.dst_port);
+    if (dstPortRange) payload.tcp_dst = dstPortRange;
+  }
+  return payload;
 }
 
 export default {
@@ -746,15 +778,15 @@ export default {
     const submitForm = async () => {
       try {
         await ruleFormRef.value.validate()
-        
+        // 自动转换表单为后端结构体格式
+        const payload = buildRulePayload(ruleForm)
         if (isEdit.value) {
-          await api.updateRule(currentRuleId.value, ruleForm)
+          await api.updateRule(currentRuleId.value, payload)
           ElMessage.success('更新成功')
         } else {
-          await api.addRule(ruleForm)
+          await api.addRule(payload)
           ElMessage.success('添加成功')
         }
-        
         dialogVisible.value = false
         fetchRules()
       } catch (error) {

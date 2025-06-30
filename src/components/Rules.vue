@@ -125,6 +125,13 @@
         <el-form-item label="规则描述" prop="desc">
           <el-input v-model="ruleForm.desc" placeholder="请输入规则描述" />
         </el-form-item>
+        <el-form-item label="协议" prop="protocol">
+          <el-input 
+            v-model="ruleForm.protocol" 
+            placeholder="请输入协议名称(如TCP, UDP)或协议号(如6, 17)"
+            @change="handleProtocolChange"
+          />
+        </el-form-item>
         <el-form-item label="源IP" prop="src_ip_start">
           <el-input v-model="ruleForm.src_ip_start" 
           placeholder="例如: 192.168.1.0/24, 10.0.0.1-10.0.0.100 或 any" />
@@ -138,18 +145,18 @@
           placeholder="例如: 10.0.0.1-10.0.0.50, 192.168.1.0/24 或 any" />
         </el-form-item>
         <el-form-item label="源端口" prop="src_port">
-          <el-input v-model="ruleForm.src_port" placeholder="例如: 80, 443 或 1-65535" />
+          <el-input 
+            v-model="ruleForm.src_port" 
+            placeholder="例如: 80, 443 或 1-65535" 
+            :disabled="!isPortProtocol"
+          />
         </el-form-item>
         <el-form-item label="目标端口" prop="dst_port">
-          <el-input v-model="ruleForm.dst_port" placeholder="例如: 80, 443 或 1-65535" />
-        </el-form-item>
-        <el-form-item label="协议" prop="protocol">
-          <el-select v-model="ruleForm.protocol" placeholder="请选择协议">
-            <el-option label="TCP" value="tcp" />
-            <el-option label="UDP" value="udp" />
-            <el-option label="ICMP" value="icmp" />
-            <el-option label="ANY" value="any" />
-          </el-select>
+          <el-input 
+            v-model="ruleForm.dst_port" 
+            placeholder="例如: 80, 443 或 1-65535" 
+            :disabled="!isPortProtocol"
+          />
         </el-form-item>
         <el-form-item label="动作" prop="action">
           <el-radio-group v-model="ruleForm.action">
@@ -157,9 +164,9 @@
             <el-radio label="drop">拒绝</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="优先级" prop="priority">
+        <!-- <el-form-item label="优先级" prop="priority">
           <el-input-number v-model="ruleForm.priority" :min="0" :max="1000" />
-        </el-form-item>
+        </el-form-item> -->
         <el-form-item label="过期时间" prop="expire_at">
           <el-date-picker
             v-model="ruleForm.expire_at"
@@ -301,24 +308,49 @@ const api = {
     }
   },
   addRule: async (rule) => {
-    const response = await axios.put(`${API_BASE_URL}${API_ENDPOINTS.RULES}`, rule)
-    return response
+    try {
+      const response = await axios.put(`${API_BASE_URL}${API_ENDPOINTS.RULES}`, rule)
+      return response;
+    }catch (error) {
+      console.error('Failed to add rule:', error);
+      throw error; 
+    }
   },
   updateRule: async (id, rule) => {
-    const response = await axios.put(`${API_BASE_URL}${API_ENDPOINTS.RULES}/${id}`, rule)
-    return response
+    try {
+      const response = await axios.put(`${API_BASE_URL}${API_ENDPOINTS.RULES}/${id}`, rule)
+      return response
+    } catch (error) {
+      console.error('Failed to update rule:', error);
+      throw error;
+    }
   },
   deleteRule: async (id) => {
-    const response = await axios.delete(`${API_BASE_URL}${API_ENDPOINTS.RULES}/${id}`)
-    return response
+    try {
+      const response = await axios.delete(`${API_BASE_URL}${API_ENDPOINTS.RULES}/${id}`)
+      return response
+    } catch (error) {
+      console.error('Failed to delete rule:', error);
+      throw error;
+    }
   },
   getDefaultRule: async () => {
-    const response = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.RULES_DEFAULT}`)
-    return response
+    try {
+      const response = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.RULES_DEFAULT}`)
+      return response
+    }catch (error) {
+      console.error('Failed to get default rule:', error);
+      throw error;
+    }
   },
   saveDefaultRule: async (rule) => {
-    const response = await axios.put(`${API_BASE_URL}${API_ENDPOINTS.RULES_DEFAULT}`, rule)
-    return response
+    try {
+      const response = await axios.put(`${API_BASE_URL}${API_ENDPOINTS.RULES_DEFAULT}`, rule)
+      return response
+    }catch (error) {
+      console.error('Failed to save default rule:', error);
+      throw error;
+    }
   },
   
   // 获取过期规则（暂时使用mock，因为后端可能没有这个接口）
@@ -426,6 +458,26 @@ const validatePort = (rule, value) => {
   })
 }
 
+
+const validateProtocol = (rule, value) => {
+  return new Promise((resolve, reject) => {
+    if (!value) {
+      reject(new Error('请输入协议'))
+      return
+    }
+
+    const lowerValue = value.toLowerCase()
+    const validateProtocols = ['tcp', 'udp', 'icmp', 'any', '6', '17', '1']
+
+    if (!validateProtocols.includes(lowerValue)) {
+      reject(new Error('请输入有效的协议名称或协议号'))
+    } else {
+      resolve()
+    }
+
+  })
+}
+
 export default {
   name: 'Rules',
   setup() {
@@ -446,6 +498,12 @@ export default {
       action: 'pass',
       desc: '默认通过所有流量'
     })
+
+    // 计算属性判断当前协议是否支持端口
+    const isPortProtocol = computed(() => {
+      const protocol = ruleForm.protocol?.toLowerCase()
+      return protocol === 'tcp' || protocol === 'udp' || protocol === '6' || protocol === '17'
+    })
     
     
     // 对话框相关
@@ -455,24 +513,41 @@ export default {
     const ruleFormRef = ref(null)  // 表单引用
     const ruleForm = reactive({
       id: 0,
-      type: 'ip',
+      type: null,
       desc: '',
-      src_ip_start: 'any',
-      src_ip_end: 'any',
-      dst_ip: 'any',
-      src_port: 'any',
-      dst_port: 'any',
-      protocol: 'tcp',
+      src_ip_start: null,
+      src_ip_end: null,
+      dst_ip: null,
+      src_port: null,
+      dst_port: null,
+      protocol: null,
       action: 'pass',
-      priority: 100,
+      // priority: 100,
       expire_at: null
     })
+
+    // 协议映射表
+    const protocolMap = {
+      // 名称映射
+      // 'tcp': '6',
+      // 'udp': '17',
+      // 'icmp': '1',
+      // 'any': 'any',
+      // 数字映射
+      '6': 'tcp',
+      '17': 'udp',
+      '1': 'icmp'
+    }
     
     // 表单验证规则
     const formRules = reactive({
       desc: [
         { required: true, message: '请输入规则描述', trigger: 'blur' },
         { min: 3, max: 50, message: '长度在3到50个字符', trigger: 'blur' }
+      ],
+      protocol: [
+        { required: true, message: '请输入协议名称(TCP, UDP, ICMP, any)或协议号(6, 17, 1)', trigger: 'blur' },
+        { validator: validateProtocol, trigger: 'blur' }
       ],
       src_ip_start: [
         { required: true, message: '请输入源IP', trigger: 'blur' },
@@ -486,23 +561,20 @@ export default {
         { validator: validateIP, trigger: 'blur' }
       ],
       src_port: [
-        { required: true, message: '请输入源端口', trigger: 'blur' },
-        { validator: validatePort, trigger: 'blur'}
+        { required: isPortProtocol, message: '请输入源端口', trigger: 'blur' },
+        { validator: validatePort, trigger: 'blur', when: isPortProtocol}
       ],
       dst_port: [
-        { required: true, message: '请输入目标端口', trigger: 'blur' },
-        { validator: validatePort, trigger: 'blur'}
-      ],
-      protocol: [
-        { required: true, message: '请选择协议', trigger: 'change' }
+        { required: isPortProtocol, message: '请输入目标端口', trigger: 'blur' },
+        { validator: validatePort, trigger: 'blur', when: isPortProtocol}
       ],
       action: [
         { required: true, message: '请选择动作', trigger: 'change' }
       ],
-      priority: [
-        { required: true, message: '请输入优先级', trigger: 'blur' },
-        { type: 'number', min: 0, max: 1000, message: '优先级范围0-1000', trigger: 'blur' }
-      ]
+      // priority: [
+      //   { required: true, message: '请输入优先级', trigger: 'blur' },
+      //   { type: 'number', min: 0, max: 1000, message: '优先级范围0-1000', trigger: 'blur' }
+      // ]
     })
 
     
@@ -549,11 +621,32 @@ export default {
     const protocolTagType = (protocol) => {
       const types = {
         tcp: '',
+        6: '',
         udp: 'info',
+        17: 'info',
         icmp: 'warning',
+        1: 'warning',
         any: 'success'
       }
       return types[protocol] || ''
+    }
+
+
+    // 协议变更处理
+    const handleProtocolChange = (value) => {
+      const protocol = value?.toLowerCase()
+      
+      // 如果协议不支持端口，清空端口值
+      if (!isPortProtocol.value) {
+        ruleForm.src_port = 'any'
+        ruleForm.dst_port = 'any'
+      }
+      
+      // 自动转换协议格式
+      if (protocolMap[protocol]) {
+        // 统一转换为小写名称：
+        ruleForm.protocol = protocolMap[protocol] === protocol ? protocol : protocolMap[protocol]
+      }
     }
 
     // 获取规则列表数据
@@ -601,7 +694,7 @@ export default {
       dst_port: 'any',
       protocol: 'tcp',
       action: 'pass',
-      priority: 100,
+      // priority: 100,
       expire_at: null
     }
 
@@ -629,7 +722,7 @@ export default {
         dst_port: row.dst_port || 'any',
         protocol: row.protocol || 'tcp',
         action: row.action || 'pass',
-        priority: row.priority || 100,
+        // priority: row.priority || 100,
         expire_at: row.expire_at || null
       })
       dialogVisible.value = true
@@ -824,6 +917,8 @@ export default {
       
       // 方法
       protocolTagType,
+      isPortProtocol,
+      handleProtocolChange,
       handleAdd,
       handleEdit,
       handleDelete,

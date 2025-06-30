@@ -36,46 +36,10 @@
       <el-table :data="filteredRules" style="width: 100%" v-loading="loading">
         <el-table-column prop="id" label="ID" width="80" sortable />
         <el-table-column prop="desc" label="规则描述" width="180" />
-        <el-table-column label="源IP" width="200">
-          <template #default="{ row }">
-            <div v-if="row.src_ip_start === row.src_ip_end || row.src_ip_end === 'any'">
-              {{ row.src_ip_start === 'any' ? 'any' : row.src_ip_start }}
-            </div>
-            <div v-else>
-              {{ row.src_ip_start }} - {{ row.src_ip_end }}
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="目的IP" width="200">
-          <template #default="{ row }">
-            <div v-if="row.dst_ip_start === row.dst_ip_end || row.dst_ip_end === 'any'">
-              {{ row.dst_ip_start === 'any' ? 'any' : row.dst_ip_start }}
-            </div>
-            <div v-else>
-              {{ row.dst_ip_start }} - {{ row.dst_ip_end }}
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="源端口" width="120">
-          <template #default="{ row }">
-            <div v-if="row.src_port_start === row.src_port_end || row.src_port_end === 'any'">
-              {{ row.src_port_start === 'any' ? 'any' : row.src_port_start }}
-            </div>
-            <div v-else>
-              {{ row.src_port_start }} - {{ row.src_port_end }}
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="目标端口" width="120">
-          <template #default="{ row }">
-            <div v-if="row.dst_port_start === row.dst_port_end || row.dst_port_end === 'any'">
-              {{ row.dst_port_start === 'any' ? 'any' : row.dst_port_start }}
-            </div>
-            <div v-else>
-              {{ row.dst_port_start }} - {{ row.dst_port_end }}
-            </div>
-          </template>
-        </el-table-column>
+        <el-table-column prop="src_ip" label="源IP" width="150" />
+        <el-table-column prop="dst_ip" label="目的IP" width="150" />
+        <el-table-column prop="src_port" label="源端口" width="100" />
+        <el-table-column prop="dst_port" label="目标端口" width="100" />
         <el-table-column prop="protocol" label="协议" width="100">
           <template #default="{ row }">
             <el-tag :type="protocolTagType(row.protocol)">
@@ -90,6 +54,7 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="priority" label="优先级" width="100" sortable />
         <!-- 创建时间支持升、降序排列 -->
         <el-table-column prop="created_at" label="创建时间" width="180" sortable />
         <!-- 
@@ -161,67 +126,20 @@
         <el-form-item label="规则描述" prop="desc">
           <el-input v-model="ruleForm.desc" placeholder="请输入规则描述" />
         </el-form-item>
-        
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="源IP起始" prop="src_ip_start">
-              <el-input v-model="ruleForm.src_ip_start" 
-              placeholder="例如: 192.168.1.1 或 any" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="源IP结束" prop="src_ip_end">
-              <el-input v-model="ruleForm.src_ip_end" 
-              placeholder="例如: 192.168.1.100 或 any" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="目的IP起始" prop="dst_ip_start">
-              <el-input v-model="ruleForm.dst_ip_start" 
-              placeholder="例如: 10.0.0.1 或 any" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="目的IP结束" prop="dst_ip_end">
-              <el-input v-model="ruleForm.dst_ip_end" 
-              placeholder="例如: 10.0.0.50 或 any" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="源端口起始" prop="src_port_start">
-              <el-input v-model="ruleForm.src_port_start" 
-              placeholder="例如: 80 或 any" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="源端口结束" prop="src_port_end">
-              <el-input v-model="ruleForm.src_port_end" 
-              placeholder="例如: 443 或 any" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="目标端口起始" prop="dst_port_start">
-              <el-input v-model="ruleForm.dst_port_start" 
-              placeholder="例如: 80 或 any" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="目标端口结束" prop="dst_port_end">
-              <el-input v-model="ruleForm.dst_port_end" 
-              placeholder="例如: 443 或 any" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        
+        <el-form-item label="源IP" prop="src_ip">
+          <el-input v-model="ruleForm.src_ip" 
+          placeholder="例如: 192.168.1.0/24, 10.0.0.1-10.0.0.100 或 any" />
+        </el-form-item>
+        <el-form-item label="目的IP" prop="dst_ip">
+          <el-input v-model="ruleForm.dst_ip" 
+          placeholder="例如: 10.0.0.1-10.0.0.50, 192.168.1.0/24 或 any" />
+        </el-form-item>
+        <el-form-item label="源端口" prop="src_port">
+          <el-input v-model="ruleForm.src_port" placeholder="例如: 80, 443 或 1-65535" />
+        </el-form-item>
+        <el-form-item label="目标端口" prop="dst_port">
+          <el-input v-model="ruleForm.dst_port" placeholder="例如: 80, 443 或 1-65535" />
+        </el-form-item>
         <el-form-item label="协议" prop="protocol">
           <el-select v-model="ruleForm.protocol" placeholder="请选择协议">
             <el-option label="TCP" value="tcp" />
@@ -230,14 +148,15 @@
             <el-option label="ANY" value="any" />
           </el-select>
         </el-form-item>
-        
         <el-form-item label="动作" prop="action">
           <el-radio-group v-model="ruleForm.action">
             <el-radio label="pass">允许</el-radio>
             <el-radio label="drop">拒绝</el-radio>
           </el-radio-group>
         </el-form-item>
-        
+        <el-form-item label="优先级" prop="priority">
+          <el-input-number v-model="ruleForm.priority" :min="0" :max="1000" />
+        </el-form-item>
         <el-form-item label="过期时间" prop="expire_at">
           <el-date-picker
             v-model="ruleForm.expire_at"
@@ -422,37 +341,6 @@ const isValidIP = (ip) => {
   })
 }
 
-// 辅助函数：验证端口号
-const isValidPort = (port) => {
-  const num = parseInt(port, 10)
-  return num >= 1 && num <= 65535
-}
-
-// 辅助函数：验证IP范围
-const validateIPRange = (start, end) => {
-  if (start === 'any' || end === 'any') return true
-  if (!isValidIP(start) || !isValidIP(end)) return false
-  
-  const startParts = start.split('.').map(Number)
-  const endParts = end.split('.').map(Number)
-  
-  for (let i = 0; i < 4; i++) {
-    if (startParts[i] < endParts[i]) return true
-    if (startParts[i] > endParts[i]) return false
-  }
-  return true // 相等的情况
-}
-
-// 辅助函数：验证端口范围
-const validatePortRange = (start, end) => {
-  if (start === 'any' || end === 'any') return true
-  if (!isValidPort(start) || !isValidPort(end)) return false
-  
-  const startNum = parseInt(start, 10)
-  const endNum = parseInt(end, 10)
-  return startNum <= endNum
-}
-
 // 添加IP验证方法
 const validateIP = (rule, value) => {
   return new Promise((resolve, reject) => {
@@ -506,33 +394,32 @@ const validatePort = (rule, value) => {
       return
     }
 
-    // 检查是否为单个端口
-    if (/^\d{1,5}$/.test(value)) {
-      const num = parseInt(value, 10)
-      if (num < 1 || num > 65535) {
-        reject(new Error('端口范围应为 1-65535'))
-        return
-      }
-      resolve()
+    // 端口范围验证
+    const isValid = /^(\d{1,5}(-\d{1,5})?)(,\d{1,5}(-\d{1,5})?)*$/.test(value)
+    if (!isValid) {
+      reject(new Error('格式应为: 80 或 80,443 或 1-65535'))
       return
     }
 
-    // 检查端口范围格式 (如 80-443)
-    const rangePattern = /^(\d{1,5})-(\d{1,5})$/
-    if (rangePattern.test(value)) {
-      const [, start, end] = value.match(rangePattern)
-      const startNum = parseInt(start, 10)
-      const endNum = parseInt(end, 10)
-      
-      if (startNum < 1 || endNum > 65535 || startNum > endNum) {
-        reject(new Error('端口范围格式不正确'))
-        return
+    // 验证每个端口范围
+    const allPorts = value.split(',')
+    for (const port of allPorts) {
+      if (port.includes('-')) {
+        const [start, end] = port.split('-').map(Number)
+        if (start > end || start < 1 || end > 65535) {
+          reject(new Error(`无效范围: ${port}`))
+          return
+        }
+      } else {
+        const num = Number(port)
+        if (num < 1 || num > 65535) {
+          reject(new Error(`无效端口: ${port}`))
+          return
+        }
       }
-      resolve()
-      return
     }
 
-    reject(new Error('端口格式应为: 80 或 80-443'))
+    resolve()
   })
 }
 
@@ -567,16 +454,13 @@ export default {
       id: 0,
       type: 'ip',
       desc: '',
-      src_ip_start: 'any',
-      src_ip_end: 'any',
-      dst_ip_start: 'any',
-      dst_ip_end: 'any',
-      src_port_start: 'any',
-      src_port_end: 'any',
-      dst_port_start: 'any',
-      dst_port_end: 'any',
+      src_ip: 'any',
+      dst_ip: 'any',
+      src_port: 'any',
+      dst_port: 'any',
       protocol: 'tcp',
       action: 'pass',
+      priority: 100,
       expire_at: null
     })
     
@@ -586,87 +470,31 @@ export default {
         { required: true, message: '请输入规则描述', trigger: 'blur' },
         { min: 3, max: 50, message: '长度在3到50个字符', trigger: 'blur' }
       ],
-      src_ip_start: [
-        { required: true, message: '请输入源IP起始', trigger: 'blur' },
+      src_ip: [
+        { required: true, message: '请输入源IP', trigger: 'blur' },
         { validator: validateIP, trigger: 'blur' }
       ],
-      src_ip_end: [
-        { validator: validateIP, trigger: 'blur' },
-        { 
-          validator: (rule, value, callback) => {
-            if (value && value !== 'any' && ruleForm.src_ip_start && ruleForm.src_ip_start !== 'any') {
-              if (!validateIPRange(ruleForm.src_ip_start, value)) {
-                callback(new Error('源IP结束地址应大于等于起始地址'))
-                return
-              }
-            }
-            callback()
-          }, 
-          trigger: 'blur' 
-        }
-      ],
-      dst_ip_start: [
-        { required: true, message: '请输入目的IP起始', trigger: 'blur' },
+      dst_ip: [
+        { required: true, message: '请输入目的IP', trigger: 'blur' },
         { validator: validateIP, trigger: 'blur' }
       ],
-      dst_ip_end: [
-        { validator: validateIP, trigger: 'blur' },
-        { 
-          validator: (rule, value, callback) => {
-            if (value && value !== 'any' && ruleForm.dst_ip_start && ruleForm.dst_ip_start !== 'any') {
-              if (!validateIPRange(ruleForm.dst_ip_start, value)) {
-                callback(new Error('目的IP结束地址应大于等于起始地址'))
-                return
-              }
-            }
-            callback()
-          }, 
-          trigger: 'blur' 
-        }
-      ],
-      src_port_start: [
-        { required: true, message: '请输入源端口起始', trigger: 'blur' },
+      src_port: [
+        { required: true, message: '请输入源端口', trigger: 'blur' },
         { validator: validatePort, trigger: 'blur'}
       ],
-      src_port_end: [
-        { validator: validatePort, trigger: 'blur'},
-        { 
-          validator: (rule, value, callback) => {
-            if (value && value !== 'any' && ruleForm.src_port_start && ruleForm.src_port_start !== 'any') {
-              if (!validatePortRange(ruleForm.src_port_start, value)) {
-                callback(new Error('源端口结束应大于等于起始端口'))
-                return
-              }
-            }
-            callback()
-          }, 
-          trigger: 'blur' 
-        }
-      ],
-      dst_port_start: [
-        { required: true, message: '请输入目标端口起始', trigger: 'blur' },
+      dst_port: [
+        { required: true, message: '请输入目标端口', trigger: 'blur' },
         { validator: validatePort, trigger: 'blur'}
-      ],
-      dst_port_end: [
-        { validator: validatePort, trigger: 'blur'},
-        { 
-          validator: (rule, value, callback) => {
-            if (value && value !== 'any' && ruleForm.dst_port_start && ruleForm.dst_port_start !== 'any') {
-              if (!validatePortRange(ruleForm.dst_port_start, value)) {
-                callback(new Error('目标端口结束应大于等于起始端口'))
-                return
-              }
-            }
-            callback()
-          }, 
-          trigger: 'blur' 
-        }
       ],
       protocol: [
         { required: true, message: '请选择协议', trigger: 'change' }
       ],
       action: [
         { required: true, message: '请选择动作', trigger: 'change' }
+      ],
+      priority: [
+        { required: true, message: '请输入优先级', trigger: 'blur' },
+        { type: 'number', min: 0, max: 1000, message: '优先级范围0-1000', trigger: 'blur' }
       ]
     })
 
@@ -699,15 +527,11 @@ export default {
       const query = searchQuery.value.toLowerCase()
       return rules.value.filter(rule =>
         rule.desc.toLowerCase().includes(query) ||
-        (rule.src_ip_start && rule.src_ip_start.toLowerCase().includes(query)) ||
-        (rule.src_ip_end && rule.src_ip_end.toLowerCase().includes(query)) ||
-        (rule.dst_ip_start && rule.dst_ip_start.toLowerCase().includes(query)) ||
-        (rule.dst_ip_end && rule.dst_ip_end.toLowerCase().includes(query)) ||
+        rule.src_ip.toLowerCase().includes(query) ||
+        rule.dst_ip.toLowerCase().includes(query) ||
         rule.protocol.toLowerCase().includes(query) ||
-        (rule.src_port_start && rule.src_port_start.toLowerCase().includes(query)) ||
-        (rule.src_port_end && rule.src_port_end.toLowerCase().includes(query)) ||
-        (rule.dst_port_start && rule.dst_port_start.toLowerCase().includes(query)) ||
-        (rule.dst_port_end && rule.dst_port_end.toLowerCase().includes(query)) ||
+        rule.src_port.toLowerCase().includes(query) ||
+        rule.dst_port.toLowerCase().includes(query) ||
         rule.action.toLowerCase().includes(query)
       )
     })
@@ -761,16 +585,13 @@ export default {
       id: 0,
       type: 'ip',
       desc: '',
-      src_ip_start: 'any',
-      src_ip_end: 'any',
-      dst_ip_start: 'any',
-      dst_ip_end: 'any',
-      src_port_start: 'any',
-      src_port_end: 'any',
-      dst_port_start: 'any',
-      dst_port_end: 'any',
+      src_ip: 'any',
+      dst_ip: 'any',
+      src_port: 'any',
+      dst_port: 'any',
       protocol: 'tcp',
       action: 'pass',
+      priority: 100,
       expire_at: null
     }
 
@@ -791,16 +612,13 @@ export default {
         id: row.id,
         type: row.type || 'ip',
         desc: row.desc || '',
-        src_ip_start: row.src_ip_start || 'any',
-        src_ip_end: row.src_ip_end || 'any',
-        dst_ip_start: row.dst_ip_start || 'any',
-        dst_ip_end: row.dst_ip_end || 'any',
-        src_port_start: row.src_port_start || 'any',
-        src_port_end: row.src_port_end || 'any',
-        dst_port_start: row.dst_port_start || 'any',
-        dst_port_end: row.dst_port_end || 'any',
+        src_ip: row.src_ip || 'any',
+        dst_ip: row.dst_ip || 'any',
+        src_port: row.src_port || 'any',
+        dst_port: row.dst_port || 'any',
         protocol: row.protocol || 'tcp',
         action: row.action || 'pass',
+        priority: row.priority || 100,
         expire_at: row.expire_at || null
       })
       dialogVisible.value = true

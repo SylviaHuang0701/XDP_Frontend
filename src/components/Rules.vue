@@ -54,6 +54,7 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="priority" label="优先级" width="100" sortable />
         <!-- 创建时间支持升、降序排列 -->
         <el-table-column prop="created_at" label="创建时间" width="180" sortable />
         <!-- 
@@ -135,10 +136,6 @@
         <el-form-item label="源IP" prop="src_ip_start">
           <el-input v-model="ruleForm.src_ip_start" 
           placeholder="例如: 192.168.1.0/24, 10.0.0.1-10.0.0.100 或 any" />
-        </el-form-item>
-        <el-form-item label="源IP结束" prop="src_ip_end">
-          <el-input v-model="ruleForm.src_ip_end" 
-          placeholder="例如: 192.168.1.100 或 any" />
         </el-form-item>
         <el-form-item label="目的IP" prop="dst_ip">
           <el-input v-model="ruleForm.dst_ip" 
@@ -553,9 +550,6 @@ export default {
         { required: true, message: '请输入源IP', trigger: 'blur' },
         { validator: validateIP, trigger: 'blur' }
       ],
-      src_ip_end: [
-        { validator: validateIP, trigger: 'blur' }
-      ],
       dst_ip: [
         { required: true, message: '请输入目的IP', trigger: 'blur' },
         { validator: validateIP, trigger: 'blur' }
@@ -654,7 +648,6 @@ export default {
       loading.value = true
       try {
         const response = await api.getRules(currentPage.value, pageSize.value)
-        // 适配后端返回的数据结构
         rules.value = response.data.rules || response.data || []
         totalRules.value = response.data.total || response.data.length || 0
       } catch (error) {
@@ -668,7 +661,6 @@ export default {
     const fetchDefaultRule = async () => {
       try {
         const response = await api.getDefaultRule()
-        // 适配后端返回的数据结构
         const defaultRuleData = response.data || { action: 'pass', desc: '默认放行所有流量' }
         Object.assign(defaultRule, defaultRuleData)
         Object.assign(ConfirmdefaultRule, defaultRuleData)
@@ -687,8 +679,7 @@ export default {
       id: 0,
       type: 'ip',
       desc: '',
-      src_ip_start: 'any',
-      src_ip_end: 'any',
+      src_ip: 'any',
       dst_ip: 'any',
       src_port: 'any',
       dst_port: 'any',
@@ -715,8 +706,7 @@ export default {
         id: row.id,
         type: row.type || 'ip',
         desc: row.desc || '',
-        src_ip_start: row.src_ip || 'any',
-        src_ip_end: row.src_ip || 'any',
+        src_ip: row.src_ip || 'any',
         dst_ip: row.dst_ip || 'any',
         src_port: row.src_port || 'any',
         dst_port: row.dst_port || 'any',

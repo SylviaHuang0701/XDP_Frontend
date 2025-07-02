@@ -119,7 +119,7 @@
       <el-form
         ref="ruleFormRef"
         :model="ruleForm"
-        :rules="rules"
+        :rules="formRules"
         label-width="120px"
         label-position="left"
       >
@@ -135,7 +135,7 @@
         </el-form-item>
         <el-form-item label="源IP" prop="src_ip_start">
           <el-input v-model="ruleForm.src_ip_start" 
-          placeholder="例如: 192.168.1.0/24, 10.0.0.1-10.0.0.100 或 any" />
+          placeholder="例如: 192.168.1.0/24, 10.0.0.1-10.0.0.100 或 any 或 0000:0000:0000:0000:0000:0000:0000:0000 - FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF" />
         </el-form-item>
         <el-form-item label="目的IP" prop="dst_ip">
           <el-input v-model="ruleForm.dst_ip" 
@@ -381,12 +381,38 @@ const validateIP = (rule, value) => {
       return
     }
 
+    // 检查是否为IPv6
+    if (value.includes(':')) {
+      // IPv6验证
+      const ipv6Pattern = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
+      
+      // 检查IPv6范围格式
+      if (value.includes('-')) {
+        const [start, end] = value.split('-').map(s => s.trim());
+        if (!ipv6Pattern.test(start) || !ipv6Pattern.test(end)) {
+          reject(new Error('IPv6 范围格式不正确'))
+          return
+        }
+        resolve()
+        return
+      }
+      
+      // 检查单个IPv6
+      if (!ipv6Pattern.test(value)) {
+        reject(new Error('请输入有效的 IPv6 地址'))
+        return
+      }
+      resolve()
+      return
+    }
+
+    // IPv4验证
     // 检查IP范围格式 (如 192.168.1.1-192.168.1.100)
     const rangePattern = /^(\d{1,3}\.){3}\d{1,3}-(\d{1,3}\.){3}\d{1,3}$/
     if (rangePattern.test(value)) {
       const [start, end] = value.split('-')
       if (!isValidIP(start) || !isValidIP(end)) { 
-        reject(new Error('IP 范围格式不正确'))
+        reject(new Error('IPv4 范围格式不正确'))
       } else {
         resolve()
       }
@@ -405,9 +431,9 @@ const validateIP = (rule, value) => {
       return
     }
 
-    // 检查单个IP
+    // 检查单个IPv4
     if (!isValidIP(value)) {
-      reject(new Error('请输入有效的 IP 地址、IP 范围或 CIDR'))
+      reject(new Error('请输入有效的 IPv4 地址、IP 范围或 CIDR'))
     } else {
       resolve()
     }
@@ -485,26 +511,31 @@ function parsePortRange(input) {
   const port = parseInt(input, 10);
   return [port, port];
 }
-function buildRulePayload(form) {
-  const payload = {
-    action: form.action,
-    protocol: form.protocol,
-    type: form.type,
-    desc: form.desc,
+
+const isIPv6LessThan = (ip1, ip2) => {
+  // 将 IPv6 地址转换为统一的 8 段格式
+  const normalizeIPv6 = (ip) => {
+    // 展开 IPv6 地址中的 ::
+    ip = ip.replace('::', Array(8 - ip.split(':').length + 2).join(':') + ':');
+    return ip.split(':').map(segment => segment.padStart(4, '0')).join('');
   };
-  // IP范围
-  const srcIpRange = parseRange(form.src_ip);
-  if (srcIpRange) payload.ipv4_src = srcIpRange;
-  const dstIpRange = parseRange(form.dst_ip);
-  if (dstIpRange) payload.ipv4_dst = dstIpRange;
-  // 端口范围
-  if (form.protocol && ['tcp', 'udp', '6', '17'].includes(form.protocol.toLowerCase())) {
-    const srcPortRange = parsePortRange(form.src_port);
-    if (srcPortRange) payload.tcp_src = srcPortRange;
-    const dstPortRange = parsePortRange(form.dst_port);
-    if (dstPortRange) payload.tcp_dst = dstPortRange;
-  }
-  return payload;
+
+  // 转换为 32 字符的 16 进制字符串
+  const normalizedIp1 = normalizeIPv6(ip1);
+  const normalizedIp2 = normalizeIPv6(ip2);
+
+  // 比较字符串的大小
+  return normalizedIp1 < normalizedIp2;
+};
+
+const isIPv4LessThan= (ip1, ip2) => {
+  const ipToNumber = (ip) => {
+    return ip.split('.').reduce((acc, segment) => {
+      return (acc << 8) + parseInt(segment, 10);
+    }, 0);
+  };
+
+  return ipToNumber(ip1) < ipToNumber(ip2);
 }
 
 export default {
@@ -521,10 +552,12 @@ export default {
     // 默认规则
     const defaultRule = reactive({
       action: 'pass',
+      protocol: 'any',
       desc: '默认通过所有流量'
     })
     const ConfirmdefaultRule = reactive({
       action: 'pass',
+      protocol: 'any',
       desc: '默认通过所有流量'
     })
 
@@ -542,17 +575,20 @@ export default {
     const ruleFormRef = ref(null)  // 表单引用
     const ruleForm = reactive({
       id: 0,
-      type: null,
+      type: 'ip',
       desc: '',
-      src_ip_start: null,
-      src_ip_end: null,
-      dst_ip: null,
-      src_port: null,
-      dst_port: null,
-      protocol: null,
+      src_ip_start: 'any',
+      dst_ip: 'any',
+      src_port: 'any',
+      dst_port: 'any',
+      protocol: 'tcp',
       action: 'pass',
       // priority: 100,
-      expire_at: null
+      expire_at: null,
+      created_at: null,
+      updated_at: null,
+      text: null,
+      domain: null
     })
 
     // 协议映射表
@@ -566,6 +602,177 @@ export default {
       '6': 'tcp',
       '17': 'udp',
       '1': 'icmp'
+    }
+
+    // 判断IP地址类型
+    const isIPv6 = (ip) => {
+      // IPv6地址包含冒号
+      return ip.includes(':');
+    }
+
+    // 判断IP地址是否有效
+    const isValidIPv4 = (ip) => {
+      const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+      if (!ipPattern.test(ip)) return false;
+      return ip.split('.').every(segment => {
+        const num = parseInt(segment, 10);
+        return num >= 0 && num <= 255;
+      });
+    }
+
+    const isValidIPv6 = (ip) => {
+      // 简化的IPv6验证
+      const ipv6Pattern = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
+      return ipv6Pattern.test(ip);
+    }
+
+    // 解析IP范围并自动识别IPv4/IPv6
+    const parseIpRange = (input) => {
+      if (!input || input === 'any') {
+        return {
+          ipv4: ['any', 'any'],
+          ipv6: ['any', 'any']
+        };
+      }
+
+      if (input.includes('-')) {
+        const [start, end] = input.split('-').map(s => s.trim());
+        
+        // 检测两端是否都是IPv4
+        if (isValidIPv4(start) && isValidIPv4(end)) {
+          if (!isIPv4LessThan(start, end)) {
+            return{
+              ipv4: null,
+              ipv6: null,
+              error: 'IPv4 范围左侧必须小于右侧'
+            }
+          }
+          return {
+            ipv4: [start, end],
+            ipv6: null
+          };
+        }
+        
+        // 检测两端是否都是IPv6
+        if (isValidIPv6(start) && isValidIPv6(end)) {
+          if (!isIPv6LessThan(start, end)) {
+            return{
+              ipv4: null,
+              ipv6: null,
+              error: 'IPv6 范围左侧必须小于右侧'
+            }
+          }
+          return {
+            ipv4: null,
+            ipv6: [start, end]
+          };
+        }
+        
+        // 如果都不是，返回错误
+        return {
+          ipv4: null,
+          ipv6: null,
+          error: 'IP范围两端必须是相同类型的IP地址（IPv4或IPv6）'
+        };
+      } else {
+        // 单个IP
+        if (isValidIPv4(input)) {
+          return {
+            ipv4: [input, input],
+            ipv6: null
+          };
+        } else if (isValidIPv6(input)) {
+          return {
+            ipv4: null,
+            ipv6: [input, input]
+          };
+        } else {
+          return {
+            ipv4: null,
+            ipv6: null,
+            error: '请输入有效的IPv4或IPv6地址'
+          };
+        }
+      }
+    }
+
+    // 协议名称到协议号的映射
+    const protocolToNumber = {
+      'tcp': 6,
+      'udp': 17,
+      'icmp': 1,
+      'any': 0
+    }
+
+    // 协议号到协议名称的映射
+    const protocolNumberToName = {
+      6: 'tcp',
+      17: 'udp',
+      1: 'icmp',
+      0: 'any'
+    }
+
+    // 将协议号转换为协议名称
+    const getProtocolName = (protocolNumber) => {
+      if (typeof protocolNumber === 'string') {
+        // 如果已经是字符串，直接返回
+        return protocolNumber
+      }
+      return protocolNumberToName[protocolNumber] || 'unknown'
+    }
+
+    // 构建规则载荷函数
+    const buildRulePayload = (form) => {
+      const payload = {
+        action: form.action,
+        type: form.type,
+        desc: form.desc,
+      };
+
+      // 转换协议为数字
+      const protocol = form.protocol?.toLowerCase();
+      if (protocolToNumber.hasOwnProperty(protocol)) {
+        payload.protocol = protocolToNumber[protocol];
+      } else if (!isNaN(parseInt(protocol))) {
+        // 如果已经是数字，直接使用
+        payload.protocol = parseInt(protocol);
+      } else {
+        throw new Error('无效的协议类型');
+      }
+
+      // 解析源IP地址
+      const srcIpRange = parseIpRange(form.src_ip_start);
+      if (srcIpRange.error) {
+        throw new Error(`源IP地址错误: ${srcIpRange.error}`);
+      }
+      if (srcIpRange.ipv4) {
+        payload.ipv4_src = srcIpRange.ipv4;
+      }
+      if (srcIpRange.ipv6) {
+        payload.ipv6_src = srcIpRange.ipv6;
+      }
+
+      // 解析目标IP地址
+      const dstIpRange = parseIpRange(form.dst_ip);
+      if (dstIpRange.error) {
+        throw new Error(`目标IP地址错误: ${dstIpRange.error}`);
+      }
+      if (dstIpRange.ipv4) {
+        payload.ipv4_dst = dstIpRange.ipv4;
+      }
+      if (dstIpRange.ipv6) {
+        payload.ipv6_dst = dstIpRange.ipv6;
+      }
+
+      // 端口范围
+      if (payload.protocol && [6, 17].includes(payload.protocol)) {
+        const srcPortRange = parsePortRange(form.src_port);
+        if (srcPortRange) payload.tcp_src = srcPortRange;
+        const dstPortRange = parsePortRange(form.dst_port);
+        if (dstPortRange) payload.tcp_dst = dstPortRange;
+      }
+
+      return payload;
     }
     
     // 表单验证规则
@@ -680,7 +887,14 @@ export default {
       loading.value = true
       try {
         const response = await api.getRules(currentPage.value, pageSize.value)
-        rules.value = response.data.rules || response.data || []
+        const rulesData = response.data.rules || response.data || []
+        
+        // 转换协议号为协议名称
+        rules.value = rulesData.map(rule => ({
+          ...rule,
+          protocol: getProtocolName(rule.protocol)
+        }))
+        
         totalRules.value = response.data.total || response.data.length || 0
       } catch (error) {
         ElMessage.error('获取规则列表失败: ' + error.message)
@@ -693,15 +907,24 @@ export default {
     const fetchDefaultRule = async () => {
       try {
         const response = await api.getDefaultRule()
-        const defaultRuleData = response.data || { action: 'pass', desc: '默认放行所有流量' }
-        Object.assign(defaultRule, defaultRuleData)
-        Object.assign(ConfirmdefaultRule, defaultRuleData)
+        const defaultRuleData = response.data || { action: 'pass', protocol: 0, desc: '默认放行所有流量' }
+        
+        // 转换协议号为协议名称
+        const processedData = {
+          ...defaultRuleData,
+          protocol: getProtocolName(defaultRuleData.protocol)
+        }
+        
+        Object.assign(defaultRule, processedData)
+        Object.assign(ConfirmdefaultRule, processedData)
       } catch (error) {
         ElMessage.error('获取默认规则失败: ' + error.message)
         // 设置默认值
         defaultRule.action = 'pass'
+        defaultRule.protocol = 'any'
         defaultRule.desc = '默认放行所有流量'
         ConfirmdefaultRule.action = 'pass'
+        ConfirmdefaultRule.protocol = 'any'
         ConfirmdefaultRule.desc = '默认放行所有流量'
       }
     }
@@ -711,14 +934,18 @@ export default {
       id: 0,
       type: 'ip',
       desc: '',
-      src_ip: 'any',
+      src_ip_start: 'any', 
       dst_ip: 'any',
       src_port: 'any',
       dst_port: 'any',
       protocol: 'tcp',
       action: 'pass',
       // priority: 100,
-      expire_at: null
+      expire_at: null,
+      created_at: null,
+      updated_at: null,
+      text: null,
+      domain: null
     }
 
     // 添加规则
@@ -738,11 +965,11 @@ export default {
         id: row.id,
         type: row.type || 'ip',
         desc: row.desc || '',
-        src_ip: row.src_ip || 'any',
+        src_ip_start: row.src_ip || 'any',
         dst_ip: row.dst_ip || 'any',
         src_port: row.src_port || 'any',
         dst_port: row.dst_port || 'any',
-        protocol: row.protocol || 'tcp',
+        protocol: getProtocolName(row.protocol) || 'tcp',
         action: row.action || 'pass',
         // priority: row.priority || 100,
         expire_at: row.expire_at || null
@@ -815,7 +1042,15 @@ export default {
 
         ConfirmdefaultRule.action = defaultRule.action
         ConfirmdefaultRule.desc = defaultRule.desc
-        await api.saveDefaultRule(defaultRule)
+        
+        // 构建发送给后端的默认规则数据（协议名称转换为协议号）
+        const defaultRulePayload = {
+          action: defaultRule.action,
+          protocol: protocolToNumber[defaultRule.protocol] || 0,
+          desc: defaultRule.desc
+        }
+        
+        await api.saveDefaultRule(defaultRulePayload)
         ElMessage.success('默认规则保存成功')
       } catch (error) {
         ElMessage.error('保存失败: ' + error.message)
@@ -930,7 +1165,7 @@ export default {
       isEdit,
       ruleFormRef,
       ruleForm,
-      rules: formRules,
+      formRules,
       filteredRules,
       blacklistForm,
       expiredRules,

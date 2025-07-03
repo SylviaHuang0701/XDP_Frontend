@@ -1068,6 +1068,14 @@ export default {
       currentPage.value = 1
     }
 
+    watch(
+    [currentPage, pageSize],  // 同时监听页码和页数
+    () => {
+      fetchRules();  // 参数变化时自动重新加载数据
+    },
+    { immediate: true }  // 初始化时立即执行一次
+      );
+
     // 页容量设置
     const handleSizeChange = (val) => {
       pageSize.value = val

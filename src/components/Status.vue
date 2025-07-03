@@ -2,16 +2,16 @@
   <el-card>
     <h2>状态监控</h2>
     <el-row :gutter="20" style="margin-bottom: 1em;">
-      <el-col :span="6">
+      <el-col :span="8">
         <el-statistic title="Pass" :value="status.pass" />
       </el-col>
-      <el-col :span="6">
+      <!-- <el-col :span="6">
         <el-statistic title="Abort" :value="status.abort" />
-      </el-col>
-      <el-col :span="6">
+      </el-col> -->
+      <el-col :span="8">
         <el-statistic title="Drop" :value="status.drop" />
       </el-col>
-      <el-col :span="6">
+      <el-col :span="8">
         <el-statistic title="Bandwidth" :value="status.bandwidth" suffix="MB/s" />
       </el-col>
     </el-row>

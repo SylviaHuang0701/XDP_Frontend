@@ -102,6 +102,7 @@ export default {
     })
 
     const fetchLogs = async () => {
+      loading.value = true
       try {
         let url = `${API_BASE_URL}/status/logs`
         const params = {}
@@ -111,7 +112,9 @@ export default {
           params.to = dateRange.value[1].toISOString()
         }
         
+        console.log('发送日志请求:', url, params)
         const response = await axios.get(url, { params })
+        console.log('收到日志响应:', response.data)
         logs.value = response.data.logs || []
       } catch (error) {
         console.error('获取日志失败:', error)

@@ -350,16 +350,30 @@ const api = {
     }
   },
   
-  // 获取过期规则（暂时使用mock，因为后端可能没有这个接口）
+  // 获取过期规则
   getExpiredRules: async (days) => {
-    // 暂时返回空数组，因为后端可能没有这个接口
-    return { data: [] }
+    try {
+      const response = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.RULES}/expired`, {
+        params: { days }
+      });
+      return response;
+    } catch (error) {
+      console.error('Failed to get expired rules:', error);
+      throw error;
+    }
   },
   
-  // 清理过期规则（暂时使用mock）
+  // 清理过期规则
   cleanExpiredRules: async (days) => {
-    // 暂时返回成功，因为后端可能没有这个接口
-    return { success: true, deleted: 0 }
+    try {
+      const response = await axios.delete(`${API_BASE_URL}${API_ENDPOINTS.RULES}/expired`, {
+        params: { days }
+      });
+      return response;
+    } catch (error) {
+      console.error('Failed to clean expired rules:', error);
+      throw error;
+    }
   }
 }
 
@@ -604,11 +618,6 @@ export default {
       '1': 'icmp'
     }
 
-    // 判断IP地址类型
-    const isIPv6 = (ip) => {
-      // IPv6地址包含冒号
-      return ip.includes(':');
-    }
 
     // 判断IP地址是否有效
     const isValidIPv4 = (ip) => {
@@ -838,13 +847,13 @@ export default {
       }
       const query = searchQuery.value.toLowerCase()
       return rules.value.filter(rule =>
-        rule.desc.toLowerCase().includes(query) ||
-        rule.src_ip.toLowerCase().includes(query) ||
-        rule.dst_ip.toLowerCase().includes(query) ||
-        rule.protocol.toLowerCase().includes(query) ||
-        rule.src_port.toLowerCase().includes(query) ||
-        rule.dst_port.toLowerCase().includes(query) ||
-        rule.action.toLowerCase().includes(query)
+        rule.desc?.toLowerCase().includes(query) ||
+        rule.src_ip?.toLowerCase().includes(query) ||
+        rule.dst_ip?.toLowerCase().includes(query) ||
+        rule.protocol?.toLowerCase().includes(query) ||
+        rule.src_port?.toLowerCase().includes(query) ||
+        rule.dst_port?.toLowerCase().includes(query) ||
+        rule.action?.toLowerCase().includes(query)
       )
     })
   
@@ -889,11 +898,38 @@ export default {
         const response = await api.getRules(currentPage.value, pageSize.value)
         const rulesData = response.data.rules || response.data || []
         
-        // 转换协议号为协议名称
-        rules.value = rulesData.map(rule => ({
-          ...rule,
-          protocol: getProtocolName(rule.protocol)
-        }))
+        // 转换协议号为协议名称，并处理字段名映射
+        rules.value = rulesData.map(rule => {
+          // 处理IP范围字段
+          const src_ip = rule.src ? (rule.src[0] === rule.src[1] ? rule.src[0] : `${rule.src[0]}-${rule.src[1]}`) : 'any'
+          const dst_ip = rule.dst ? (rule.dst[0] === rule.dst[1] ? rule.dst[0] : `${rule.dst[0]}-${rule.dst[1]}`) : 'any'
+          
+          // 处理端口字段
+          let src_port = 'any'
+          let dst_port = 'any'
+          
+          if (rule.tcp_src) {
+            src_port = rule.tcp_src[0] === rule.tcp_src[1] ? rule.tcp_src[0].toString() : `${rule.tcp_src[0]}-${rule.tcp_src[1]}`
+          } else if (rule.udp_src) {
+            src_port = rule.udp_src[0] === rule.udp_src[1] ? rule.udp_src[0].toString() : `${rule.udp_src[0]}-${rule.udp_src[1]}`
+          }
+          
+          if (rule.tcp_dst) {
+            dst_port = rule.tcp_dst[0] === rule.tcp_dst[1] ? rule.tcp_dst[0].toString() : `${rule.tcp_dst[0]}-${rule.tcp_dst[1]}`
+          } else if (rule.udp_dst) {
+            dst_port = rule.udp_dst[0] === rule.udp_dst[1] ? rule.udp_dst[0].toString() : `${rule.udp_dst[0]}-${rule.udp_dst[1]}`
+          }
+          
+          return {
+            ...rule,
+            src_ip,
+            dst_ip,
+            src_port,
+            dst_port,
+            protocol: getProtocolName(rule.protocol),
+            priority: 100 // 默认优先级，因为后端没有这个字段
+          }
+        })
         
         totalRules.value = response.data.total || response.data.length || 0
       } catch (error) {
@@ -1092,7 +1128,21 @@ export default {
       blacklistLoading.value = true
       try {
         const response = await api.getExpiredRules(blacklistForm.expire_days)
-        expiredRules.value = response.data
+        const expiredRulesData = response.data || []
+        
+        // 处理过期规则数据，适配前端显示格式
+        expiredRules.value = expiredRulesData.map(rule => {
+          // 处理IP范围字段
+          const src_ip = rule.src ? (rule.src[0] === rule.src[1] ? rule.src[0] : `${rule.src[0]}-${rule.src[1]}`) : 'any'
+          const dst_ip = rule.dst ? (rule.dst[0] === rule.dst[1] ? rule.dst[0] : `${rule.dst[0]}-${rule.dst[1]}`) : 'any'
+          
+          return {
+            ...rule,
+            src_ip,
+            dst_ip,
+            protocol: getProtocolName(rule.protocol)
+          }
+        })
       } catch (error) {
         ElMessage.error('获取过期规则失败: ' + error.message)
       } finally {
@@ -1116,7 +1166,8 @@ export default {
 
         // 执行清除操作
         const response = await api.cleanExpiredRules(blacklistForm.expire_days)
-        ElMessage.success(`成功清理${response.deleted}条过期规则`)
+        const deletedCount = response.data?.deleted || 0
+        ElMessage.success(`成功清理${deletedCount}条过期规则`)
         fetchExpiredRules()
       } catch (error) {
         if (error !== 'cancel') {

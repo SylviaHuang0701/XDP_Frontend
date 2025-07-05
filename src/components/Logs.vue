@@ -25,7 +25,6 @@
       </el-row>
 
       <!-- 表格展示区配置 -->
-      <!-- 绑定分页后的数据源 paginatedLogs -->
       <el-table
         :data="logs"  
         style="width: 100%" 
@@ -91,21 +90,17 @@ export default {
     const currentPage = ref(1)
     const pageSize = ref(10)
 
-    // 计算总日志数
-    const totalLogs = computed(() => logs.value.length)
-    
-    // 计算分页后的日志
-    const paginatedLogs = computed(() => {
-      const start = (currentPage.value - 1) * pageSize.value
-      const end = start + pageSize.value
-      return logs.value.slice(start, end)
-    })
+    // 总日志数（从后端获取）
+    const totalLogs = ref(0)
 
     const fetchLogs = async () => {
       loading.value = true
       try {
         let url = `${API_BASE_URL}/status/logs`
-        const params = {}
+        const params = {
+          page: currentPage.value,
+          page_size: pageSize.value
+        }
         
         if (dateRange.value && dateRange.value.length === 2) {
           params.from = dateRange.value[0].toISOString()
@@ -116,6 +111,7 @@ export default {
         const response = await axios.get(url, { params })
         console.log('收到日志响应:', response.data)
         logs.value = response.data.logs || []
+        totalLogs.value = response.data.total || 0
       } catch (error) {
         console.error('获取日志失败:', error)
         ElMessage.error('获取日志失败')
@@ -132,6 +128,7 @@ export default {
     // 分页处理
     const handlePageChange = (page) => {
       currentPage.value = page
+      fetchLogs() // 重新获取数据
     }
 
     const getLogLevelType = (level) => {
@@ -160,7 +157,6 @@ export default {
       handlePageChange,
       totalLogs,
       pageSize,
-      paginatedLogs,
       getLogLevelType
     }
   }

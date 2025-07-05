@@ -49,6 +49,16 @@
               </template>
             </el-table-column>
           </el-table>
+          
+          <!-- 规则匹配分页 -->
+          <el-pagination
+            style="margin-top: 1em;"
+            layout="total, prev, pager, next"
+            :total="ruleMatchTotal"
+            :page-size="ruleMatchPageSize"
+            :current-page="ruleMatchPage"
+            @current-change="handleRuleMatchPageChange"
+          />
         </el-card>
 
         <!-- 表二：流量最高 IP --> 
@@ -79,6 +89,16 @@
             <el-table-column prop="dst_port" label="目的端口" />
             <el-table-column prop="state" label="状态" />
           </el-table>
+          
+          <!-- TCP连接分页 -->
+          <el-pagination
+            style="margin-top: 1em;"
+            layout="total, prev, pager, next"
+            :total="tcpTotal"
+            :page-size="tcpPageSize"
+            :current-page="tcpPage"
+            @current-change="handleTcpPageChange"
+          />
         </el-card>
       </template>
     </el-skeleton>
@@ -99,6 +119,16 @@ export default {
     const ruleMatches = ref([])
     const topIp = ref([])
     const tcpConnections = ref([])
+    
+    // 规则匹配分页
+    const ruleMatchPage = ref(1)
+    const ruleMatchPageSize = ref(10)
+    const ruleMatchTotal = ref(0)
+    
+    // TCP连接分页
+    const tcpPage = ref(1)
+    const tcpPageSize = ref(10)
+    const tcpTotal = ref(0)
 
     const fetchStatus = async () => {
       try {
@@ -111,8 +141,14 @@ export default {
 
     const fetchRuleMatches = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/status/rule_match?page=1`)
+        const response = await axios.get(`${API_BASE_URL}/status/rule_match`, {
+          params: {
+            page: ruleMatchPage.value,
+            page_size: ruleMatchPageSize.value
+          }
+        })
         ruleMatches.value = response.data.matches || []
+        ruleMatchTotal.value = response.data.total || 0
       } catch (error) {
         console.error('获取规则匹配失败:', error)
       }
@@ -129,11 +165,29 @@ export default {
 
     const fetchTcpConnections = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/status/tcp_connections`)
+        const response = await axios.get(`${API_BASE_URL}/status/tcp_connections`, {
+          params: {
+            page: tcpPage.value,
+            page_size: tcpPageSize.value
+          }
+        })
         tcpConnections.value = response.data.connections || []
+        tcpTotal.value = response.data.total || 0
       } catch (error) {
         console.error('获取TCP连接失败:', error)
       }
+    }
+
+    // 规则匹配分页处理
+    const handleRuleMatchPageChange = (page) => {
+      ruleMatchPage.value = page
+      fetchRuleMatches()
+    }
+    
+    // TCP连接分页处理
+    const handleTcpPageChange = (page) => {
+      tcpPage.value = page
+      fetchTcpConnections()
     }
 
     onMounted(() => {
@@ -149,7 +203,15 @@ export default {
       status, 
       ruleMatches, 
       topIp, 
-      tcpConnections 
+      tcpConnections,
+      ruleMatchPage,
+      ruleMatchPageSize,
+      ruleMatchTotal,
+      tcpPage,
+      tcpPageSize,
+      tcpTotal,
+      handleRuleMatchPageChange,
+      handleTcpPageChange
     }
   }
 }

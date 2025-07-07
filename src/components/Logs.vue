@@ -63,11 +63,17 @@
           page-size：每页能显示页数
           current-change：触发页码变更
       -->
+      <!-- 调试信息 -->
+      <div style="margin-top: 10px; font-size: 12px; color: #909399;">
+        调试信息: 当前页 {{ currentPage }}, 总页数 {{ Math.ceil(totalLogs / pageSize) }}, 总记录数 {{ totalLogs }}
+      </div>
+      
       <el-pagination
         style="margin-top: 1em;"
         layout="prev, pager, next"
         :total="totalLogs"
         :page-size="pageSize"
+        v-model:current-page="currentPage"
         @current-change="handlePageChange"
       />
     </el-card>
@@ -93,9 +99,14 @@ export default {
     // 总日志数（从后端获取）
     const totalLogs = ref(0)
 
-    const fetchLogs = async () => {
+    const fetchLogs = async (resetPage = true) => {
       loading.value = true
       try {
+        // 如果是刷新操作，重置到第一页
+        if (resetPage) {
+          currentPage.value = 1
+        }
+        
         let url = `${API_BASE_URL}/status/logs`
         const params = {
           page: currentPage.value,
@@ -112,6 +123,17 @@ export default {
         console.log('收到日志响应:', response.data)
         logs.value = response.data.logs || []
         totalLogs.value = response.data.total || 0
+        console.log('当前页码:', currentPage.value, '总页数:', Math.ceil(totalLogs.value / pageSize.value))
+        
+        // 检查当前页是否超出范围，但不递归调用
+        const maxPage = Math.ceil(totalLogs.value / pageSize.value)
+        if (currentPage.value > maxPage && maxPage > 0) {
+          currentPage.value = maxPage
+          // 直接重新请求，避免递归
+          const newParams = { ...params, page: currentPage.value }
+          const newResponse = await axios.get(url, { params: newParams })
+          logs.value = newResponse.data.logs || []
+        }
       } catch (error) {
         console.error('获取日志失败:', error)
         ElMessage.error('获取日志失败')
@@ -121,14 +143,17 @@ export default {
     }
 
     const resetFilter = () => {
+      console.log('重置过滤器，当前页码:', currentPage.value)
       dateRange.value = []
-      fetchLogs()
+      currentPage.value = 1 // 显式重置页码
+      fetchLogs(true) // 重置到第一页
     }
 
     // 分页处理
     const handlePageChange = (page) => {
+      console.log('页码变化:', page)
       currentPage.value = page
-      fetchLogs() // 重新获取数据
+      fetchLogs(false) 
     }
 
     const getLogLevelType = (level) => {
@@ -155,6 +180,7 @@ export default {
       resetFilter,
       loading, 
       handlePageChange,
+      currentPage,
       totalLogs,
       pageSize,
       getLogLevelType

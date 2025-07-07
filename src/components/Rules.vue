@@ -40,6 +40,7 @@
         <el-table-column prop="dst_ip" label="目的IP" width="150" />
         <el-table-column prop="src_port" label="源端口" width="100" />
         <el-table-column prop="dst_port" label="目标端口" width="100" />
+        <el-table-column prop="domain" label="域名" width="120" />
         <el-table-column prop="protocol" label="协议" width="100">
           <template #default="{ row }">
             <el-tag :type="protocolTagType(row.protocol)">
@@ -153,6 +154,12 @@
             v-model="ruleForm.dst_port" 
             placeholder="例如: 80 或 1-65535" 
             :disabled="!isPortProtocol"
+          />
+        </el-form-item>
+        <el-form-item label="域名" prop="domain">
+          <el-input 
+            v-model="ruleForm.domain" 
+            placeholder="例如: example.com 或 *.example.com 或 any" 
           />
         </el-form-item>
         <el-form-item label="动作" prop="action">
@@ -589,7 +596,6 @@ export default {
     const ruleFormRef = ref(null)  // 表单引用
     const ruleForm = reactive({
       id: 0,
-      type: 'ip',
       desc: '',
       src_ip_start: 'any',
       dst_ip: 'any',
@@ -734,7 +740,6 @@ export default {
     const buildRulePayload = (form) => {
       const payload = {
         action: form.action,
-        type: form.type,
         desc: form.desc,
       };
 
@@ -779,6 +784,11 @@ export default {
         if (srcPortRange) payload.tcp_src = srcPortRange;
         const dstPortRange = parsePortRange(form.dst_port);
         if (dstPortRange) payload.tcp_dst = dstPortRange;
+      }
+
+      // 域名
+      if (form.domain && form.domain !== 'any') {
+        payload.domain = form.domain;
       }
 
       return payload;
@@ -853,6 +863,7 @@ export default {
         rule.protocol?.toLowerCase().includes(query) ||
         rule.src_port?.toLowerCase().includes(query) ||
         rule.dst_port?.toLowerCase().includes(query) ||
+        rule.domain?.toLowerCase().includes(query) ||
         rule.action?.toLowerCase().includes(query)
       )
     })
@@ -926,6 +937,7 @@ export default {
             dst_ip,
             src_port,
             dst_port,
+            domain: rule.domain || 'any',
             protocol: getProtocolName(rule.protocol),
             priority: 100 // 默认优先级，因为后端没有这个字段
           }
@@ -968,7 +980,6 @@ export default {
     // 定义初始表单数据
     const initialFormState = {
       id: 0,
-      type: 'ip',
       desc: '',
       src_ip_start: 'any', 
       dst_ip: 'any',
@@ -999,7 +1010,6 @@ export default {
       // 使用 Object.assign 更新 reactive 对象
       Object.assign(ruleForm, {
         id: row.id,
-        type: row.type || 'ip',
         desc: row.desc || '',
         src_ip_start: row.src_ip || 'any',
         dst_ip: row.dst_ip || 'any',
@@ -1007,6 +1017,7 @@ export default {
         dst_port: row.dst_port || 'any',
         protocol: getProtocolName(row.protocol) || 'tcp',
         action: row.action || 'pass',
+        domain: row.domain || 'any',
         // priority: row.priority || 100,
         expire_at: row.expire_at || null
       })

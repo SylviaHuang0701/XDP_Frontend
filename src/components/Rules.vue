@@ -239,7 +239,7 @@
       <!-- 添加当前选择的提示 (用户已选择过期时间) -->
       <el-alert 
         v-if="blacklistForm.expire_days"
-        :title="`当前显示: ${getExpiredDaysText(blacklistForm.expire_days)}删除的规则`" 
+        :title="`当前显示: ${getExpiredDaysText(blacklistForm.expire_days)}过期的规则`" 
         type="info" 
         show-icon 
         style="margin-bottom: 20px;" 
@@ -358,11 +358,9 @@ const api = {
   },
   
   // 获取过期规则
-  getExpiredRules: async (days) => {
+  getExpiredRules: async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.RULES}/expired`, {
-        params: { days }
-      });
+      const response = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.RULES}`);
       return response;
     } catch (error) {
       console.error('Failed to get expired rules:', error);
@@ -371,10 +369,10 @@ const api = {
   },
   
   // 清理过期规则
-  cleanExpiredRules: async (days) => {
+  cleanExpiredRules: async (ruleIds) => {
     try {
-      const response = await axios.delete(`${API_BASE_URL}${API_ENDPOINTS.RULES}/expired`, {
-        params: { days }
+      const response = await axios.delete(`${API_BASE_URL}${API_ENDPOINTS.RULES}`, {
+        data: { id: ruleIds } // 通过请求体发送ID数组
       });
       return response;
     } catch (error) {
@@ -822,7 +820,7 @@ export default {
       ],
       action: [
         { required: true, message: '请选择动作', trigger: 'change' }
-      ],
+      ]
       // priority: [
       //   { required: true, message: '请输入优先级', trigger: 'blur' },
       //   { type: 'number', min: 0, max: 1000, message: '优先级范围0-1000', trigger: 'blur' }
@@ -1134,15 +1132,38 @@ export default {
     }
     
     // 小黑屋方法
-    // 获取过期的规则列表
+    // 获取所有规则并在前端筛选过期规则
     const fetchExpiredRules = async () => {
       blacklistLoading.value = true
       try {
-        const response = await api.getExpiredRules(blacklistForm.expire_days)
-        const expiredRulesData = response.data || []
+        // 获取所有规则
+        const response = await api.getExpiredRules()
+        const allRules = response.data || []
         
-        // 处理过期规则数据，适配前端显示格式
-        expiredRules.value = expiredRulesData.map(rule => {
+        // 获取当前时间
+        const now = new Date()
+        
+        // 根据选择的过期天数筛选规则
+        expiredRules.value = allRules.filter(rule => {
+          // 如果没有过期时间，则不过滤
+          if (!rule.expire_at) return false
+          
+          // 计算过期时间与当前时间的差值（天数）
+          const expireDate = new Date(rule.expire_at)
+          const diffDays = Math.floor((now - expireDate) / (1000 * 60 * 60 * 24))
+          
+          // 根据用户选择进行筛选
+          if (blacklistForm.expire_days === 'all') {
+            return true // 显示所有过期规则
+          } else if (blacklistForm.expire_days === '7') {
+            return diffDays >= 7
+          } else if (blacklistForm.expire_days === '30') {
+            return diffDays >= 30
+          } else if (blacklistForm.expire_days === '90') {
+            return diffDays >= 90
+          }
+          return false
+        }).map(rule => {
           // 处理IP范围字段
           const src_ip = rule.src ? (rule.src[0] === rule.src[1] ? rule.src[0] : `${rule.src[0]}-${rule.src[1]}`) : 'any'
           const dst_ip = rule.dst ? (rule.dst[0] === rule.dst[1] ? rule.dst[0] : `${rule.dst[0]}-${rule.dst[1]}`) : 'any'
@@ -1155,7 +1176,7 @@ export default {
           }
         })
       } catch (error) {
-        ElMessage.error('获取过期规则失败: ' + error.message)
+        ElMessage.error('获取规则失败: ' + error.message)
       } finally {
         blacklistLoading.value = false
       }
@@ -1175,11 +1196,20 @@ export default {
           }
         )
 
+        // 从expiredRules中提取所有ID
+        const idsToDelete = expiredRules.value.map(rule => rule.id)
+
+        // 检查
+        if (idsToDelete.length === 0) {
+          ElMessage.warning('没有可清理的过期规则')
+          return
+        }
+        
         // 执行清除操作
-        const response = await api.cleanExpiredRules(blacklistForm.expire_days)
+        const response = await api.cleanExpiredRules(idsToDelete)
         const deletedCount = response.data?.deleted || 0
         ElMessage.success(`成功清理${deletedCount}条过期规则`)
-        fetchExpiredRules()
+        fetchExpiredRules() // 刷新列表
       } catch (error) {
         if (error !== 'cancel') {
           ElMessage.error('清理失败: ' + error.message)

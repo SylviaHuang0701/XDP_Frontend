@@ -557,6 +557,21 @@ const isIPv4LessThan= (ip1, ip2) => {
   return ipToNumber(ip1) < ipToNumber(ip2);
 }
 
+const fetchAllRules = async (pageSize = 100) => {
+  let allRules = []
+  let page = 1
+  let total = 0
+  while (true) {
+    const response = await api.getRules(page, pageSize)
+    const rules = response.data.rules || []
+    total = response.data.total || 0
+    allRules = allRules.concat(rules)
+    if (allRules.length >= total || rules.length === 0) break
+    page++
+  }
+  return allRules
+}
+
 export default {
   name: 'Rules',
   setup() {
@@ -1136,38 +1151,24 @@ export default {
     const fetchExpiredRules = async () => {
       blacklistLoading.value = true
       try {
-        // 获取所有规则
         const response = await api.getExpiredRules()
-        const allRules = response.data || []
-        
-        // 获取当前时间
+        const allRules = response.data.rules || []
         const now = new Date()
-        
-        // 根据选择的过期天数筛选规则
+        const days = blacklistForm.expire_days
+
         expiredRules.value = allRules.filter(rule => {
-          // 如果没有过期时间，则不过滤
           if (!rule.expire_at) return false
-          
-          // 计算过期时间与当前时间的差值（天数）
           const expireDate = new Date(rule.expire_at)
           const diffDays = Math.floor((now - expireDate) / (1000 * 60 * 60 * 24))
-          
-          // 根据用户选择进行筛选
-          if (blacklistForm.expire_days === 'all') {
-            return true // 显示所有过期规则
-          } else if (blacklistForm.expire_days === '7') {
-            return diffDays >= 7
-          } else if (blacklistForm.expire_days === '30') {
-            return diffDays >= 30
-          } else if (blacklistForm.expire_days === '90') {
-            return diffDays >= 90
+          if (days === 'all') {
+            return true
+          } else {
+            return diffDays >= Number(days)
           }
-          return false
         }).map(rule => {
           // 处理IP范围字段
           const src_ip = rule.src ? (rule.src[0] === rule.src[1] ? rule.src[0] : `${rule.src[0]}-${rule.src[1]}`) : 'any'
           const dst_ip = rule.dst ? (rule.dst[0] === rule.dst[1] ? rule.dst[0] : `${rule.dst[0]}-${rule.dst[1]}`) : 'any'
-          
           return {
             ...rule,
             src_ip,

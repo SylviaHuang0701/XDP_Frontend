@@ -73,7 +73,7 @@
             </div>
           </template>
           <div class="chart-container">
-            <div ref="trafficChart" class="chart"></div>
+            <div ref="trafficChart" style="width: 100%; height: 400px;"></div>
           </div>
         </el-card>
 
@@ -194,11 +194,12 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { DataLine, Connection, Warning, Monitor, InfoFilled, CircleClose } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { API_BASE_URL } from '../config.js'
+import * as echarts from 'echarts'
 
 export default {
   name: 'Dashboard',
@@ -245,6 +246,13 @@ export default {
       type: 'success',
       text: '正常'
     })
+    
+    // 优化后的参数映射
+    const timeRangeOptions = {
+      '1h': { interval: '1m', duration: '1h' },    // 60点
+      '6h': { interval: '5m', duration: '6h' },    // 72点
+      '24h': { interval: '1h', duration: '24h' }   // 24点
+    }
     
     // 格式化函数
     const formatBytes = (bytes) => {
@@ -303,219 +311,90 @@ export default {
       }
     }
     
-    const fetchTrafficTrend = async () => {
-      try {
-        // 根据时间范围设置间隔
-        let interval = '5m'
-        let limit = 100
-        
-        switch (timeRange.value) {
-          case '1h':
-            interval = '1m'
-            limit = 60
-            break
-          case '6h':
-            interval = '5m'
-            limit = 72
-            break
-          case '24h':
-            interval = '1h'
-            limit = 24
-            break
-        }
-        
-        const response = await axios.get(`${API_BASE_URL}/status/traffic_trend?interval=${interval}&limit=${limit}`)
-        trafficData.value = response.data.points || []
-        renderTrafficChart()
-      } catch (error) {
-        console.error('获取流量趋势失败:', error)
-      }
+    // 解析 interval 字符串为毫秒
+    function parseInterval(interval) {
+      if (interval.endsWith('m')) return parseInt(interval) * 60 * 1000
+      if (interval.endsWith('h')) return parseInt(interval) * 60 * 60 * 1000
+      if (interval.endsWith('d')) return parseInt(interval) * 24 * 60 * 60 * 1000
+      return 0
     }
     
-    const renderTrafficChart = () => {
-      if (!trafficChart.value || trafficData.value.length === 0) return
-      
-      // 计算统计数据
-      const totalInBytes = trafficData.value.reduce((sum, point) => sum + point.bytes, 0)
-      const totalOutBytes = trafficData.value.reduce((sum, point) => sum + (point.bytes * 0.8), 0) // 模拟出站流量
-      const totalInPackets = trafficData.value.reduce((sum, point) => sum + point.in_packets, 0)
-      const totalOutPackets = trafficData.value.reduce((sum, point) => sum + (point.in_packets * 0.8), 0) // 模拟出站包数
-      
-      const avgInBytes = totalInBytes / trafficData.value.length
-      const avgOutBytes = totalOutBytes / trafficData.value.length
-      
-      // 创建Canvas折线图
-      const chartElement = trafficChart.value
-      chartElement.innerHTML = `
-        <div style="height: 100%; padding: 20px; color: #303133;">
-          <div style="text-align: center; margin-bottom: 20px;">
-            <div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">实时流量趋势</div>
-            <div style="font-size: 12px; color: #909399;">
-              时间范围: ${timeRange.value} | 数据点: ${trafficData.value.length}
-            </div>
-          </div>
-          
-          <canvas id="trafficCanvas" width="600" height="300" style="width: 100%; height: 200px; border: 1px solid #e4e7ed; border-radius: 6px; margin-bottom: 15px;"></canvas>
-          
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-            <div style="background: #f0f9ff; padding: 10px; border-radius: 6px; border-left: 4px solid #409eff;">
-              <div style="font-size: 12px; color: #409eff; margin-bottom: 5px;">入站流量</div>
-              <div style="font-size: 16px; font-weight: bold;">${formatBytes(avgInBytes)}/s</div>
-              <div style="font-size: 11px; color: #909399;">总计: ${formatBytes(totalInBytes)}</div>
-            </div>
-            <div style="background: #f0f9ff; padding: 10px; border-radius: 6px; border-left: 4px solid #67c23a;">
-              <div style="font-size: 12px; color: #67c23a; margin-bottom: 5px;">出站流量</div>
-              <div style="font-size: 16px; font-weight: bold;">${formatBytes(avgOutBytes)}/s</div>
-              <div style="font-size: 11px; color: #909399;">总计: ${formatBytes(totalOutBytes)}</div>
-            </div>
-          </div>
-          
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-            <div style="background: #fef7e0; padding: 10px; border-radius: 6px; border-left: 4px solid #e6a23c;">
-              <div style="font-size: 12px; color: #e6a23c; margin-bottom: 5px;">入站包数</div>
-              <div style="font-size: 16px; font-weight: bold;">${totalInPackets.toLocaleString()}</div>
-              <div style="font-size: 11px; color: #909399;">平均: ${Math.round(totalInPackets / trafficData.value.length)}/s</div>
-            </div>
-            <div style="background: #fef7e0; padding: 10px; border-radius: 6px; border-left: 4px solid #f56c6c;">
-              <div style="font-size: 12px; color: #f56c6c; margin-bottom: 5px;">出站包数</div>
-              <div style="font-size: 16px; font-weight: bold;">${totalOutPackets.toLocaleString()}</div>
-              <div style="font-size: 11px; color: #909399;">平均: ${Math.round(totalOutPackets / trafficData.value.length)}/s</div>
-            </div>
-          </div>
-          
-          <div style="margin-top: 15px; padding: 10px; background: #f5f7fa; border-radius: 6px; font-size: 11px; color: #606266;">
-            <div style="margin-bottom: 5px;"><strong>时间范围:</strong> ${trafficData.value.length > 0 ? new Date(trafficData.value[0].timestamp).toLocaleString() : 'N/A'} 至 ${trafficData.value.length > 0 ? new Date(trafficData.value[trafficData.value.length - 1].timestamp).toLocaleString() : 'N/A'}</div>
-            <div><strong>数据间隔:</strong> ${trafficData.value.length > 1 ? Math.round((new Date(trafficData.value[1].timestamp) - new Date(trafficData.value[0].timestamp)) / 1000 / 60) : 'N/A'} 分钟</div>
-          </div>
-        </div>
-      `
-      
-      // 绘制折线图
-      setTimeout(() => {
-        drawTrafficChart()
-      }, 100)
+    // 获取并处理后端数据
+    async function fetchTrafficTrend() {
+      const { interval, duration } = timeRangeOptions[timeRange.value]
+      const res = await axios.get(`${API_BASE_URL}/status/traffic_trend`, {
+        params: {
+          interval,
+          duration
+        }
+      })
+      const trend = res.data
+      const intervalMs = parseInterval(trend.interval)
+      const lastTime = new Date(trend.timestamp).getTime()
+      const n = trend.bytes.length
+      const arr = []
+      for (let i = 0; i < n; i++) {
+        const t = lastTime - (n - 1 - i) * intervalMs
+        const dateObj = new Date(t)
+        // 格式化时间标签（如HH:mm或MM-dd HH:mm）
+        let timeLabel = ''
+        if (intervalMs < 60 * 60 * 1000) {
+          // 小于1小时，显示HH:mm
+          timeLabel = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        } else {
+          // 否则显示MM-dd HH:mm
+          timeLabel = dateObj.toLocaleDateString([], { month: '2-digit', day: '2-digit' }) + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+        arr.push({
+          timestamp: t,
+          bytes: trend.bytes[i],
+          packets: trend.packets[i],
+          timeLabel
+        })
+      }
+      trafficData.value = arr
+      drawTrafficChart()
     }
     
     const drawTrafficChart = () => {
-      const canvas = document.getElementById('trafficCanvas')
-      if (!canvas) return
-      
-      const ctx = canvas.getContext('2d')
-      const width = canvas.width
-      const height = canvas.height
-      
-      // 清空画布
-      ctx.clearRect(0, 0, width, height)
-      
-      if (trafficData.value.length === 0) return
-      
-      // 设置图表边距
-      const margin = { top: 20, right: 30, bottom: 40, left: 60 }
-      const chartWidth = width - margin.left - margin.right
-      const chartHeight = height - margin.top - margin.bottom
-      
-      // 计算数据范围
-      const inBytesData = trafficData.value.map(point => point.bytes)
-      const outBytesData = trafficData.value.map(point => point.bytes * 0.8) // 模拟出站流量
-      const maxInBytes = Math.max(...inBytesData)
-      const maxOutBytes = Math.max(...outBytesData)
-      const maxValue = Math.max(maxInBytes, maxOutBytes)
-      
-      // 计算缩放比例
-      const xScale = chartWidth / (trafficData.value.length - 1)
-      const yScale = chartHeight / maxValue
-      
-      // 绘制网格
-      ctx.strokeStyle = '#f0f0f0'
-      ctx.lineWidth = 1
-      
-      // 水平网格线
-      for (let i = 0; i <= 5; i++) {
-        const y = margin.top + (chartHeight / 5) * i
-        ctx.beginPath()
-        ctx.moveTo(margin.left, y)
-        ctx.lineTo(width - margin.right, y)
-        ctx.stroke()
-      }
-      
-      // 垂直网格线
-      for (let i = 0; i <= 10; i++) {
-        const x = margin.left + (chartWidth / 10) * i
-        ctx.beginPath()
-        ctx.moveTo(x, margin.top)
-        ctx.lineTo(x, height - margin.bottom)
-        ctx.stroke()
-      }
-      
-      // 绘制入站流量线
-      ctx.strokeStyle = '#409eff'
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      
-      trafficData.value.forEach((point, index) => {
-        const x = margin.left + index * xScale
-        const y = height - margin.bottom - (point.bytes * yScale)
-        
-        if (index === 0) {
-          ctx.moveTo(x, y)
-        } else {
-          ctx.lineTo(x, y)
-        }
+      nextTick(() => {
+        const chart = echarts.init(trafficChart.value)
+        chart.setOption({
+          tooltip: {
+            trigger: 'axis',
+            formatter: params => {
+              // params是数组
+              let str = `<div>时间: ${params[0].axisValue}</div>`
+              params.forEach(item => {
+                str += `<div>${item.marker}${item.seriesName}: ${item.data[1]}</div>`
+              })
+              return str
+            }
+          },
+          xAxis: {
+            type: 'category',
+            data: trafficData.value.map(d => d.timeLabel),
+            axisLabel: { rotate: 45 }
+          },
+          yAxis: [
+            { type: 'value', name: '字节数' },
+            { type: 'value', name: '包数' }
+          ],
+          series: [
+            {
+              name: '字节数',
+              type: 'line',
+              data: trafficData.value.map(d => [d.timeLabel, d.bytes])
+            },
+            {
+              name: '包数',
+              type: 'line',
+              yAxisIndex: 1,
+              data: trafficData.value.map(d => [d.timeLabel, d.packets])
+            }
+          ]
+        })
       })
-      ctx.stroke()
-      
-      // 绘制出站流量线
-      ctx.strokeStyle = '#67c23a'
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      
-      trafficData.value.forEach((point, index) => {
-        const x = margin.left + index * xScale
-        const y = height - margin.bottom - (point.bytes * 0.8 * yScale) // 模拟出站流量
-        
-        if (index === 0) {
-          ctx.moveTo(x, y)
-        } else {
-          ctx.lineTo(x, y)
-        }
-      })
-      ctx.stroke()
-      
-      // 绘制图例
-      ctx.fillStyle = '#409eff'
-      ctx.fillRect(width - margin.right - 80, margin.top - 15, 15, 10)
-      ctx.fillStyle = '#303133'
-      ctx.font = '12px Arial'
-      ctx.fillText('入站', width - margin.right - 60, margin.top - 5)
-      
-      ctx.fillStyle = '#67c23a'
-      ctx.fillRect(width - margin.right - 80, margin.top, 15, 10)
-      ctx.fillStyle = '#303133'
-      ctx.fillText('出站', width - margin.right - 60, margin.top + 10)
-      
-      // 绘制Y轴标签
-      ctx.fillStyle = '#909399'
-      ctx.font = '10px Arial'
-      ctx.textAlign = 'right'
-      for (let i = 0; i <= 5; i++) {
-        const y = margin.top + (chartHeight / 5) * i
-        const value = maxValue - (maxValue / 5) * i
-        ctx.fillText(formatBytes(value), margin.left - 10, y + 3)
-      }
-      
-      // 绘制X轴标签（时间）
-      ctx.textAlign = 'center'
-      const timeLabels = []
-      const step = Math.max(1, Math.floor(trafficData.value.length / 6))
-      
-      for (let i = 0; i < trafficData.value.length; i += step) {
-        if (i < trafficData.value.length) {
-          const x = margin.left + i * xScale
-          const time = new Date(trafficData.value[i].timestamp)
-          const label = time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-          ctx.fillText(label, x, height - margin.bottom + 20)
-        }
-      }
     }
     
     const fetchConnections = async () => {
@@ -622,9 +501,10 @@ export default {
       }, 5000) // 每5秒更新一次基础数据
       
       // 流量趋势数据更新更频繁
-      const trafficTimer = setInterval(() => {
+      let trafficTimer = null
+      trafficTimer = setInterval(() => {
         fetchTrafficTrend()
-      }, 2000) // 每2秒更新一次流量趋势
+      }, 2000) // 每2s刷新一次
       
       // 启动告警检查
       alertCheckTimer = setInterval(() => {
@@ -664,7 +544,8 @@ export default {
       refreshTopIp,
       clearAlerts,
       acknowledgeAlert,
-      viewDetails
+      viewDetails,
+      fetchTrafficTrend
     }
   }
 }

@@ -98,6 +98,7 @@
                   <div class="ip-stats">
                     <span class="bytes">{{ formatBytes(scope.row.bytes) }}</span>
                     <span class="packets">{{ scope.row.packets }} 包</span>
+                    <span class="connections">{{ scope.row.connections }} 连接</span>
                   </div>
                 </div>
               </template>
@@ -156,7 +157,7 @@
           <div class="alerts-list">
             <div v-for="alert in alerts" :key="alert.id" class="alert-item" :class="`alert-${alert.level}`">
               <div class="alert-header">
-                <span class="alert-time">{{ formatTime(alert.time) }}</span>
+                <span class="alert-time">{{ formatTime(alert.timestamp) }}</span>
                 <el-tag :type="getAlertType(alert.level)" size="small">{{ alert.level.toUpperCase() }}</el-tag>
               </div>
               <div class="alert-content">{{ alert.message }}</div>
@@ -225,7 +226,8 @@ export default {
       established: 0,
       synSent: 0,
       timeWait: 0,
-      closeWait: 0
+      closeWait: 0,
+      others: 0
     })
     
     const alerts = ref([])
@@ -290,11 +292,17 @@ export default {
     const fetchStats = async () => {
       try {
         const response = await axios.get(`${API_BASE_URL}/status/`)
+        const globalStatus = response.data
+        
+        // 获取活跃规则数量
+        const rulesResponse = await axios.get(`${API_BASE_URL}/rules/`)
+        const activeRules = rulesResponse.data.rules ? rulesResponse.data.rules.length : 0
+        
         stats.value = {
-          ...response.data,
-          connections: Math.floor(Math.random() * 1000) + 100, // 模拟数据
+          bandwidth: globalStatus.bandwidth || 0,
+          connections: globalStatus.connections || 0,
           alerts: alerts.value.length,
-          activeRules: Math.floor(Math.random() * 50) + 10 // 模拟数据
+          activeRules: activeRules
         }
       } catch (error) {
         console.error('获取统计数据失败:', error)
@@ -303,7 +311,7 @@ export default {
     
     const fetchTopIp = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/status/top_ip?col=bytes`)
+        const response = await axios.get(`${API_BASE_URL}/status/top_ip?col=bytes&limit=3`)
         topIpList.value = response.data.top || []
       } catch (error) {
         console.error('获取Top IP失败:', error)
@@ -312,6 +320,7 @@ export default {
     
     // 解析 interval 字符串为毫秒
     function parseInterval(interval) {
+      if (interval.endsWith('s')) return parseInt(interval) * 1000
       if (interval.endsWith('m')) return parseInt(interval) * 60 * 1000
       if (interval.endsWith('h')) return parseInt(interval) * 60 * 60 * 1000
       if (interval.endsWith('d')) return parseInt(interval) * 24 * 60 * 60 * 1000
@@ -320,46 +329,55 @@ export default {
     
     // 获取并处理后端数据
     async function fetchTrafficTrend() {
-      const { interval, limit } = timeRangeOptions[timeRange.value]
-      const res = await axios.get(`${API_BASE_URL}/status/traffic_trend`, {
-        params: { interval, limit }
-      })
-      const trend = res.data
-      const intervalMs = parseInterval(trend.interval)
-      const lastTime = new Date(trend.timestamp).getTime()
-      const n = trend.bytes.length
-      const arr = []
-      for (let i = 0; i < n; i++) {
-        const t = lastTime - (n - 1 - i) * intervalMs
-        const dateObj = new Date(t)
-        let timeLabel = ''
-        if (intervalMs < 60 * 60 * 1000) {
-          timeLabel = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        } else {
-          timeLabel = dateObj.toLocaleDateString([], { month: '2-digit', day: '2-digit' }) + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-        arr.push({
-          timestamp: t,
-          bytes: trend.bytes[i],
-          packets: trend.packets[i],
-          timeLabel
+      try {
+        const { interval, limit } = timeRangeOptions[timeRange.value]
+        const res = await axios.get(`${API_BASE_URL}/status/traffic_trend`, {
+          params: { interval, limit }
         })
+        const trend = res.data
+        const intervalMs = parseInterval(trend.interval)
+        const lastTime = new Date(trend.timestamp).getTime()
+        const n = trend.bytes.length
+        const arr = []
+        for (let i = 0; i < n; i++) {
+          const t = lastTime - (n - 1 - i) * intervalMs
+          const dateObj = new Date(t)
+          let timeLabel = ''
+          if (intervalMs < 60 * 60 * 1000) {
+            timeLabel = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          } else {
+            timeLabel = dateObj.toLocaleDateString([], { month: '2-digit', day: '2-digit' }) + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+          arr.push({
+            timestamp: t,
+            bytes: trend.bytes[i],
+            packets: trend.packets[i],
+            timeLabel
+          })
+        }
+        trafficData.value = arr
+        drawTrafficChart()
+      } catch (error) {
+        console.error('获取流量趋势失败:', error)
       }
-      trafficData.value = arr
-      drawTrafficChart()
     }
     
     const drawTrafficChart = () => {
       nextTick(() => {
+        if (!trafficChart.value) return
+        
         const chart = echarts.init(trafficChart.value)
         chart.setOption({
           tooltip: {
             trigger: 'axis',
             formatter: params => {
-              // params是数组
               let str = `<div>时间: ${params[0].axisValue}</div>`
               params.forEach(item => {
-                str += `<div>${item.marker}${item.seriesName}: ${item.data[1]}</div>`
+                if (item.seriesName === '字节数') {
+                  str += `<div>${item.marker}${item.seriesName}: ${formatBytes(item.data[1])}</div>`
+                } else {
+                  str += `<div>${item.marker}${item.seriesName}: ${item.data[1]}</div>`
+                }
               })
               return str
             }
@@ -396,15 +414,22 @@ export default {
         const connections = response.data.connections || []
         
         // 统计连接状态
+        const stateCounts = {}
+        connections.forEach(conn => {
+          const state = conn.state || 'UNKNOWN'
+          stateCounts[state] = (stateCounts[state] || 0) + 1
+        })
+        
         connectionStats.value = {
-          established: connections.filter(c => c.state === 'ESTABLISHED').length,
-          synSent: connections.filter(c => c.state === 'SYN_SENT').length,
-          timeWait: connections.filter(c => c.state === 'TIME_WAIT').length,
-          closeWait: connections.filter(c => c.state === 'CLOSE_WAIT').length
+          established: stateCounts['ESTABLISHED'] || 0,
+          synSent: stateCounts['SYN_SENT'] || 0,
+          timeWait: stateCounts['TIME_WAIT'] || 0,
+          closeWait: stateCounts['CLOSE_WAIT'] || 0,
+          others: connections.length - (stateCounts['ESTABLISHED'] || 0) - (stateCounts['SYN_SENT'] || 0) - (stateCounts['TIME_WAIT'] || 0) - (stateCounts['CLOSE_WAIT'] || 0)
         }
         
         // 更新连接状态
-        const total = Object.values(connectionStats.value).reduce((a, b) => a + b, 0)
+        const total = connections.length
         if (total > 1000) {
           connectionStatus.value = { type: 'warning', text: '繁忙' }
         } else if (total > 500) {
@@ -412,8 +437,32 @@ export default {
         } else {
           connectionStatus.value = { type: 'success', text: '空闲' }
         }
+        
+        // 更新全局统计中的连接数
+        stats.value.connections = total
       } catch (error) {
         console.error('获取连接状态失败:', error)
+      }
+    }
+    
+    // 获取日志作为告警
+    const fetchLogs = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/status/logs?page=1&page_size=20`)
+        const logs = response.data.logs || []
+        
+        // 将日志转换为告警
+        alerts.value = logs.map(log => ({
+          id: log.id,
+          timestamp: log.timestamp,
+          level: log.level || 'info',
+          message: log.message
+        }))
+        
+        // 更新告警数量
+        stats.value.alerts = alerts.value.length
+      } catch (error) {
+        console.error('获取日志失败:', error)
       }
     }
     
@@ -421,7 +470,7 @@ export default {
     const addAlert = (level, message) => {
       const alert = {
         id: Date.now(),
-        time: new Date().toISOString(),
+        timestamp: new Date().toISOString(),
         level,
         message
       }
@@ -433,7 +482,7 @@ export default {
       }
       
       // 显示弹窗
-      if (level === 'error' || level === 'warning') {
+      if (level === 'warning') {
         currentAlert.value = alert
         showAlertDialog.value = true
       }
@@ -441,6 +490,7 @@ export default {
     
     const clearAlerts = () => {
       alerts.value = []
+      stats.value.alerts = 0
     }
     
     const acknowledgeAlert = () => {
@@ -451,21 +501,6 @@ export default {
       showAlertDialog.value = false
       // 这里可以跳转到详细页面
       ElMessage.info('跳转到告警详情页面')
-    }
-    
-    // 模拟告警生成
-    const generateRandomAlert = () => {
-      const alertTypes = [
-        { level: 'info', message: '系统运行正常' },
-        { level: 'warning', message: '检测到异常流量模式' },
-        { level: 'error', message: '发现恶意IP访问' },
-        { level: 'warning', message: '连接数接近上限' }
-      ]
-      
-      const randomType = alertTypes[Math.floor(Math.random() * alertTypes.length)]
-      if (Math.random() < 0.1) {
-        addAlert(randomType.level, randomType.message)
-      }
     }
     
     // 时间范围设置
@@ -485,12 +520,14 @@ export default {
       fetchTopIp()
       fetchConnections()
       fetchTrafficTrend()
+      fetchLogs()
       
       // 启动定时更新
       updateTimer = setInterval(() => {
         fetchStats()
         fetchTopIp()
         fetchConnections()
+        fetchLogs()
       }, 5000) // 每5秒更新一次基础数据
       
       // 流量趋势数据更新更频繁
@@ -498,11 +535,6 @@ export default {
       trafficTimer = setInterval(() => {
         fetchTrafficTrend()
       }, 2000) // 每2s刷新一次
-      
-      // 启动告警检查
-      alertCheckTimer = setInterval(() => {
-        generateRandomAlert()
-      }, 10000) // 每10秒检查一次
       
       // 清理定时器
       onUnmounted(() => {

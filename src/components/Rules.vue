@@ -805,7 +805,7 @@ export default {
 
       // 过期时间
       if (form.expire_at) {
-        payload.expire_at = form.expire_at.replace(' ', 'T') + 'Z';
+        payload.expire_at = form.expire_at.replace(' ', 'T');
       }
 
       return payload;

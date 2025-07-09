@@ -57,7 +57,11 @@
         </el-table-column>
         <el-table-column prop="priority" label="优先级" width="100" sortable />
         <!-- 创建时间支持升、降序排列 -->
-        <el-table-column prop="created_at" label="创建时间" width="180" sortable />
+        <el-table-column prop="created_at" label="创建时间" width="180" sortable>
+          <template #default="{ row }">
+            {{ row.created_at }}
+          </template>
+        </el-table-column>
         <!-- 
             操作列支持：
             1. 编辑 触发 handleEdit 方法
@@ -176,8 +180,8 @@
             v-model="ruleForm.expire_at"
             type="datetime"
             placeholder="选择过期时间（可选）"
-            format="YYYY-MM-DD HH:mm:ss"
-            value-format="YYYY-MM-DD HH:mm:ss"
+            format="YYYY-MM-DDTHH:mm:ss[Z]"
+            value-format="YYYY-MM-DDTHH:mm:ss[Z]"
           />
         </el-form-item>
       </el-form>
@@ -275,7 +279,11 @@
         <el-table :data="expiredRules" style="width: 100%" v-loading="blacklistLoading">
           <el-table-column prop="id" label="ID" width="280" align="center" />
           <el-table-column prop="desc" label="规则描述" width="320" align="center" />
-          <el-table-column prop="created_at" label="创建时间" width="320" align="center" />
+          <el-table-column prop="created_at" label="创建时间" width="320" align="center">
+            <template #default="{ row }">
+              {{ row.created_at }}
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="280" align="center">
             <template #default="{ row }">
               <el-button 
@@ -797,7 +805,7 @@ export default {
 
       // 过期时间
       if (form.expire_at) {
-        payload.expire_at = form.expire_at;
+        payload.expire_at = form.expire_at.replace(' ', 'T');
       }
 
       return payload;

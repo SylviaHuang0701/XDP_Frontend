@@ -247,11 +247,10 @@ export default {
       text: '正常'
     })
     
-    // 优化后的参数映射
     const timeRangeOptions = {
-      '1h': { interval: '1m', duration: '1h' },    // 60点
-      '6h': { interval: '5m', duration: '6h' },    // 72点
-      '24h': { interval: '1h', duration: '24h' }   // 24点
+      '1h': { interval: '1m', limit: 60 },    // 60分钟
+      '6h': { interval: '5m', limit: 72 },    // 6*12=72
+      '24h': { interval: '1h', limit: 24 }    // 24小时
     }
     
     // 格式化函数
@@ -321,12 +320,9 @@ export default {
     
     // 获取并处理后端数据
     async function fetchTrafficTrend() {
-      const { interval, duration } = timeRangeOptions[timeRange.value]
+      const { interval, limit } = timeRangeOptions[timeRange.value]
       const res = await axios.get(`${API_BASE_URL}/status/traffic_trend`, {
-        params: {
-          interval,
-          duration
-        }
+        params: { interval, limit }
       })
       const trend = res.data
       const intervalMs = parseInterval(trend.interval)
@@ -336,13 +332,10 @@ export default {
       for (let i = 0; i < n; i++) {
         const t = lastTime - (n - 1 - i) * intervalMs
         const dateObj = new Date(t)
-        // 格式化时间标签（如HH:mm或MM-dd HH:mm）
         let timeLabel = ''
         if (intervalMs < 60 * 60 * 1000) {
-          // 小于1小时，显示HH:mm
           timeLabel = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         } else {
-          // 否则显示MM-dd HH:mm
           timeLabel = dateObj.toLocaleDateString([], { month: '2-digit', day: '2-digit' }) + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
         arr.push({

@@ -66,8 +66,8 @@
             <div class="card-header">
               <span>流量趋势</span>
               <el-button-group>
+                <el-button size="small" :type="timeRange === '5min' ? 'primary' : ''" @click="setTimeRange('5min')">5分钟</el-button>
                 <el-button size="small" :type="timeRange === '1h' ? 'primary' : ''" @click="setTimeRange('1h')">1小时</el-button>
-                <el-button size="small" :type="timeRange === '6h' ? 'primary' : ''" @click="setTimeRange('6h')">6小时</el-button>
                 <el-button size="small" :type="timeRange === '24h' ? 'primary' : ''" @click="setTimeRange('24h')">24小时</el-button>
               </el-button-group>
             </div>
@@ -231,7 +231,7 @@ export default {
     })
     
     const alerts = ref([])
-    const timeRange = ref('1h')
+    const timeRange = ref('5min')
     const trafficChart = ref(null)
     const trafficData = ref([])
     
@@ -250,8 +250,8 @@ export default {
     })
     
     const timeRangeOptions = {
-      '1h': { interval: '1m', limit: 60 },    // 60分钟
-      '6h': { interval: '5m', limit: 72 },    // 6*12=72
+      '5min': { interval: '5s', limit: 60 },  // 5分钟(60个5秒间隔)
+      '1h': { interval: '1m', limit: 72 },    // 60分钟
       '24h': { interval: '1h', limit: 24 }    // 24小时
     }
     
@@ -327,7 +327,6 @@ export default {
       return 0
     }
     
-    // 获取并处理后端数据
     async function fetchTrafficTrend() {
       try {
         const { interval, limit } = timeRangeOptions[timeRange.value]
@@ -343,10 +342,14 @@ export default {
           const t = lastTime - (n - 1 - i) * intervalMs
           const dateObj = new Date(t)
           let timeLabel = ''
-          if (intervalMs < 60 * 60 * 1000) {
+          if (timeRange.value === '5min') {
+            // 5分钟模式下显示秒数
+            timeLabel = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          } else if (intervalMs < 60 * 60 * 1000) {
             timeLabel = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           } else {
-            timeLabel = dateObj.toLocaleDateString([], { month: '2-digit', day: '2-digit' }) + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            timeLabel = dateObj.toLocaleDateString([], { month: '2-digit', day: '2-digit' }) + ' ' + 
+                      dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }
           arr.push({
             timestamp: t,
@@ -361,12 +364,127 @@ export default {
         console.error('获取流量趋势失败:', error)
       }
     }
-    
+
+
+    // const drawTrafficChart = () => {
+    //   nextTick(() => {
+    //     if (!trafficChart.value) return
+        
+    //     const chart = echarts.init(trafficChart.value)
+    //     chart.setOption({
+    //       tooltip: {
+    //         trigger: 'axis',
+    //         formatter: params => {
+    //           let str = `<div>时间: ${params[0].axisValue}</div>`
+    //           params.forEach(item => {
+    //             if (item.seriesName === '字节数') {
+    //               str += `<div>${item.marker}${item.seriesName}: ${formatBytes(item.data[1])}</div>`
+    //             } else {
+    //               str += `<div>${item.marker}${item.seriesName}: ${item.data[1]}</div>`
+    //             }
+    //           })
+    //           return str
+    //         }
+    //       },
+    //       xAxis: {
+    //         type: 'category',
+    //         data: trafficData.value.map(d => d.timeLabel),
+    //         axisLabel: { 
+    //           rotate: 45,
+    //           // 只在5分钟模式下显示更密集的标签
+    //           interval: timeRange.value === '5min' ? 5 : 0
+    //         }
+    //       },
+    //       yAxis: [
+    //         { type: 'value', name: '字节数' },
+    //         { type: 'value', name: '包数' }
+    //       ],
+    //       series: [
+    //         {
+    //           name: '字节数',
+    //           type: 'line',
+    //           data: trafficData.value.map(d => [d.timeLabel, d.bytes]),
+    //           // 添加标记点配置
+    //           markPoint: timeRange.value === '5min' ? {
+    //             data: [
+    //               { type: 'max', name: '最大值' },
+    //               { type: 'min', name: '最小值' }
+    //             ],
+    //             symbolSize: 40,
+    //             label: {
+    //               formatter: '{b}'
+    //             }
+    //           } : null,
+    //           // 添加标记线配置
+    //           markLine: timeRange.value === '5min' ? {
+    //             data: [
+    //               { type: 'average', name: '平均值' }
+    //             ]
+    //           } : null,
+    //           // 显示数据点
+    //           showSymbol: timeRange.value === '5min',
+    //           symbol: 'circle',
+    //           symbolSize: 6
+    //         },
+    //         {
+    //           name: '包数',
+    //           type: 'line',
+    //           yAxisIndex: 1,
+    //           data: trafficData.value.map(d => [d.timeLabel, d.packets]),
+    //           // 同上配置
+    //           markPoint: timeRange.value === '5min' ? {
+    //             data: [
+    //               { type: 'max', name: '最大值' },
+    //               { type: 'min', name: '最小值' }
+    //             ],
+    //             symbolSize: 40,
+    //             label: {
+    //               formatter: '{b}'
+    //             }
+    //           } : null,
+    //           markLine: timeRange.value === '5min' ? {
+    //             data: [
+    //               { type: 'average', name: '平均值' }
+    //             ]
+    //           } : null,
+    //           showSymbol: timeRange.value === '5min',
+    //           symbol: 'circle',
+    //           symbolSize: 6
+    //         }
+    //       ]
+    //     })
+    //   })
+    // }
     const drawTrafficChart = () => {
       nextTick(() => {
         if (!trafficChart.value) return
         
         const chart = echarts.init(trafficChart.value)
+        
+        // 根据时间范围决定标记点和标记线的显示策略
+        const markConfig = {
+          '5min': {
+            showMarkPoint: true,
+            showMarkLine: true,
+            showSymbol: true,
+            labelInterval: 5
+          },
+          '1h': {
+            showMarkPoint: true,
+            showMarkLine: true,
+            showSymbol: false,
+            labelInterval: 12  // 每小时显示5个标签(60/5=12)
+          },
+          '24h': {
+            showMarkPoint: false,
+            showMarkLine: false,
+            showSymbol: false,
+            labelInterval: 6   // 每4小时显示一个标签(24/4=6)
+          }
+        }
+        
+        const config = markConfig[timeRange.value] || markConfig['5min']
+        
         chart.setOption({
           tooltip: {
             trigger: 'axis',
@@ -382,10 +500,21 @@ export default {
               return str
             }
           },
+          dataZoom: [
+            {
+              type: 'inside',
+              yAxisIndex: 0, // 控制第一个yAxis
+              start: 0,
+              end: 100
+            }
+          ],
           xAxis: {
             type: 'category',
             data: trafficData.value.map(d => d.timeLabel),
-            axisLabel: { rotate: 45 }
+            axisLabel: { 
+              rotate: 45,
+              interval: config.labelInterval
+            }
           },
           yAxis: [
             { type: 'value', name: '字节数' },
@@ -395,15 +524,86 @@ export default {
             {
               name: '字节数',
               type: 'line',
-              data: trafficData.value.map(d => [d.timeLabel, d.bytes])
+              data: trafficData.value.map(d => [d.timeLabel, d.bytes]),
+              markPoint: config.showMarkPoint ? {
+                data: [
+                  { type: 'max', name: '最大值' },
+                  { type: 'min', name: '最小值' }
+                ],
+                symbolSize: 40,
+                label: {
+                  formatter: '{b}'
+                }
+              } : null,
+              markLine: config.showMarkLine ? {
+                data: [
+                  { type: 'average', name: '平均值' }
+                ]
+              } : null,
+              showSymbol: config.showSymbol,
+              symbol: 'circle',
+              symbolSize: 6,
+              lineStyle: {
+                width: 2
+              },
+              areaStyle: timeRange.value === '24h' ? {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                  { offset: 0, color: 'rgba(64, 158, 255, 0.5)' },
+                  { offset: 1, color: 'rgba(64, 158, 255, 0.1)' }
+                ])
+              } : null
             },
             {
               name: '包数',
               type: 'line',
               yAxisIndex: 1,
-              data: trafficData.value.map(d => [d.timeLabel, d.packets])
+              data: trafficData.value.map(d => [d.timeLabel, d.packets]),
+              markPoint: config.showMarkPoint ? {
+                data: [
+                  { type: 'max', name: '最大值' },
+                  { type: 'min', name: '最小值' }
+                ],
+                symbolSize: 40,
+                label: {
+                  formatter: '{b}'
+                }
+              } : null,
+              markLine: config.showMarkLine ? {
+                data: [
+                  { type: 'average', name: '平均值' }
+                ]
+              } : null,
+              showSymbol: config.showSymbol,
+              symbol: 'circle',
+              symbolSize: 6,
+              lineStyle: {
+                width: 2
+              },
+              areaStyle: timeRange.value === '24h' ? {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                  { offset: 0, color: 'rgba(103, 194, 58, 0.5)' },
+                  { offset: 1, color: 'rgba(103, 194, 58, 0.1)' }
+                ])
+              } : null
             }
-          ]
+          ],
+          // 添加数据缩放功能，特别适用于24小时视图
+          dataZoom: timeRange.value === '24h' ? [
+            {
+              type: 'inside',
+              start: 0,
+              end: 100
+            },
+            {
+              start: 0,
+              end: 100
+            }
+          ] : null
+        })
+        
+        // 窗口大小变化时重新调整图表
+        window.addEventListener('resize', function() {
+          chart.resize()
         })
       })
     }
@@ -547,6 +747,12 @@ export default {
     // 生命周期
     onMounted(() => {
       init()
+
+      nextTick(() => {
+        if (trafficChart.value) {
+          drawTrafficChart()
+        }
+      })
     })
     
     return {

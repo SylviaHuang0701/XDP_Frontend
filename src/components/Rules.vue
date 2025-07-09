@@ -1277,6 +1277,7 @@ export default {
       expiredRules,
       blacklistLoading,
       getExpiredDaysText,
+      Search,
       
       // 方法
       protocolTagType,

@@ -513,16 +513,8 @@ const validateProtocol = (rule, value) => {
 }
 
 // 解析IP/端口范围
-function parseRange(input) {
-  if (!input || input === 'any') return null;
-  if (input.includes('-')) {
-    const [start, end] = input.split('-').map(s => s.trim());
-    return [start, end];
-  }
-  return [input, input];
-}
 function parsePortRange(input) {
-  if (!input || input === 'any') return null;
+  if (!input || input === 'any') return [0, 0];
   if (input.includes('-')) {
     const [start, end] = input.split('-').map(s => parseInt(s.trim(), 10));
     return [start, end];
@@ -557,20 +549,6 @@ const isIPv4LessThan= (ip1, ip2) => {
   return ipToNumber(ip1) < ipToNumber(ip2);
 }
 
-const fetchAllRules = async (pageSize = 100) => {
-  let allRules = []
-  let page = 1
-  let total = 0
-  while (true) {
-    const response = await api.getRules(page, pageSize)
-    const rules = response.data.rules || []
-    total = response.data.total || 0
-    allRules = allRules.concat(rules)
-    if (allRules.length >= total || rules.length === 0) break
-    page++
-  }
-  return allRules
-}
 
 export default {
   name: 'Rules',
@@ -772,11 +750,11 @@ export default {
       if (srcIpRange.error) {
         throw new Error(`源IP地址错误: ${srcIpRange.error}`);
       }
-      if (srcIpRange.ipv4) {
-        payload.ipv4_src = srcIpRange.ipv4;
+      if (srcIpRange.ipv4 && srcIpRange.ipv4[0] !== 'any') {
+        payload.src = srcIpRange.ipv4;
       }
-      if (srcIpRange.ipv6) {
-        payload.ipv6_src = srcIpRange.ipv6;
+      if (srcIpRange.ipv6 && srcIpRange.ipv6[0] !== 'any') {
+        payload.src = srcIpRange.ipv6;
       }
 
       // 解析目标IP地址
@@ -784,24 +762,42 @@ export default {
       if (dstIpRange.error) {
         throw new Error(`目标IP地址错误: ${dstIpRange.error}`);
       }
-      if (dstIpRange.ipv4) {
-        payload.ipv4_dst = dstIpRange.ipv4;
+      if (dstIpRange.ipv4 && dstIpRange.ipv4[0] !== 'any') {
+        payload.dst = dstIpRange.ipv4;
       }
-      if (dstIpRange.ipv6) {
-        payload.ipv6_dst = dstIpRange.ipv6;
+      if (dstIpRange.ipv6 && dstIpRange.ipv6[0] !== 'any') {
+        payload.dst = dstIpRange.ipv6;
       }
 
-      // 端口范围
+      // 端口范围 - 根据协议类型设置不同的字段
       if (payload.protocol && [6, 17].includes(payload.protocol)) {
         const srcPortRange = parsePortRange(form.src_port);
-        if (srcPortRange) payload.tcp_src = srcPortRange;
+        if (srcPortRange[0] !== 0 || srcPortRange[1] !== 0) {
+          if (payload.protocol === 6) {
+            payload.tcp_src = srcPortRange;
+          } else if (payload.protocol === 17) {
+            payload.udp_src = srcPortRange;
+          }
+        }
+        
         const dstPortRange = parsePortRange(form.dst_port);
-        if (dstPortRange) payload.tcp_dst = dstPortRange;
+        if (dstPortRange[0] !== 0 || dstPortRange[1] !== 0) {
+          if (payload.protocol === 6) {
+            payload.tcp_dst = dstPortRange;
+          } else if (payload.protocol === 17) {
+            payload.udp_dst = dstPortRange;
+          }
+        }
       }
 
       // 域名
       if (form.domain && form.domain !== 'any') {
         payload.domain = form.domain;
+      }
+
+      // 过期时间
+      if (form.expire_at) {
+        payload.expire_at = form.expire_at;
       }
 
       return payload;
@@ -886,15 +882,15 @@ export default {
     // 设置协议颜色
     const protocolTagType = (protocol) => {
       const types = {
-        tcp: '',
-        6: '',
+        tcp: 'primary',
+        6: 'primary',
         udp: 'info',
         17: 'info',
         icmp: 'warning',
         1: 'warning',
         any: 'success'
       }
-      return types[protocol] || ''
+      return types[protocol] || 'primary'
     }
 
 
@@ -1067,6 +1063,7 @@ export default {
         await ruleFormRef.value.validate()
         // 自动转换表单为后端结构体格式
         const payload = buildRulePayload(ruleForm)
+        console.log(payload)
         if (isEdit.value) {
           await api.updateRule(currentRuleId.value, payload)
           ElMessage.success('更新成功')

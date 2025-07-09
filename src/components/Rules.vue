@@ -339,10 +339,14 @@ const api = {
   },
   deleteRule: async (id) => {
     try {
-      const response = await axios.delete(`${API_BASE_URL}${API_ENDPOINTS.RULES}/${id}`)
-      return response
+      const response = await axios.delete(`${API_BASE_URL}${API_ENDPOINTS.RULES}/${id}`);
+      return response;
     } catch (error) {
-      console.error('Failed to delete rule:', error);
+      console.error('删除规则失败:', {
+        url: `${API_BASE_URL}${API_ENDPOINTS.RULES}/${id}`,
+        method: 'DELETE',
+        error: error.response?.data || error.message
+      });
       throw error;
     }
   },
@@ -368,10 +372,17 @@ const api = {
   // 获取过期规则
   getExpiredRules: async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.RULES}`);
+      const response = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.RULES}`, {
+        params: { expired: true }  // 添加参数标识获取过期规则
+      });
       return response;
     } catch (error) {
-      console.error('Failed to get expired rules:', error);
+      console.error('获取过期规则失败:', {
+        url: `${API_BASE_URL}${API_ENDPOINTS.RULES}`,
+        method: 'GET',
+        params: { expired: true },
+        error: error.response?.data || error.message
+      });
       throw error;
     }
   },
@@ -379,8 +390,9 @@ const api = {
   // 清理过期规则
   cleanExpiredRules: async (ruleIds) => {
     try {
+      // 尝试将ID作为查询参数发送
       const response = await axios.delete(`${API_BASE_URL}${API_ENDPOINTS.RULES}`, {
-        data: { id: ruleIds } // 通过请求体发送ID数组
+        params: { ids: ruleIds.join(',') }
       });
       return response;
     } catch (error) {
@@ -1154,44 +1166,37 @@ export default {
     // 小黑屋方法
     // 获取所有规则并在前端筛选过期规则
     const fetchExpiredRules = async () => {
-      blacklistLoading.value = true
+      blacklistLoading.value = true;
       try {
-        const response = await api.getExpiredRules()
-        const allRules = response.data.rules || []
-        const now = new Date()
-        const days = blacklistForm.expire_days
+        const response = await api.getExpiredRules();
+        const allRules = response.data.rules || response.data || [];
+        const now = new Date();
+        const days = blacklistForm.expire_days;
 
         expiredRules.value = allRules.filter(rule => {
-          if (!rule.expire_at) return false
-          const expireDate = new Date(rule.expire_at)
-          const diffDays = Math.floor((now - expireDate) / (1000 * 60 * 60 * 24))
-          if (days === 'all') {
-            return true
-          } else {
-            return diffDays >= Number(days)
-          }
-        }).map(rule => {
-          // 处理IP范围字段
-          const src_ip = rule.src ? (rule.src[0] === rule.src[1] ? rule.src[0] : `${rule.src[0]}-${rule.src[1]}`) : 'any'
-          const dst_ip = rule.dst ? (rule.dst[0] === rule.dst[1] ? rule.dst[0] : `${rule.dst[0]}-${rule.dst[1]}`) : 'any'
-          return {
-            ...rule,
-            src_ip,
-            dst_ip,
-            protocol: getProtocolName(rule.protocol)
-          }
-        })
+          if (!rule.expire_at) return false;
+          const expireDate = new Date(rule.expire_at);
+          const diffDays = Math.floor((now - expireDate) / (1000 * 60 * 60 * 24));
+          
+          if (days === 'all') return true;
+          return diffDays >= Number(days);
+        }).map(rule => ({
+          ...rule,
+          src_ip: rule.src ? (rule.src[0] === rule.src[1] ? rule.src[0] : `${rule.src[0]}-${rule.src[1]}`) : 'any',
+          dst_ip: rule.dst ? (rule.dst[0] === rule.dst[1] ? rule.dst[0] : `${rule.dst[0]}-${rule.dst[1]}`) : 'any',
+          protocol: getProtocolName(rule.protocol)
+        }));
       } catch (error) {
-        ElMessage.error('获取规则失败: ' + error.message)
+        console.error('获取过期规则失败:', error);
+        ElMessage.error('获取规则失败: ' + (error.response?.data?.message || error.message));
       } finally {
-        blacklistLoading.value = false
+        blacklistLoading.value = false;
       }
     }
 
     // 清除过期的规则列表
     const handleCleanExpired = async () => {
       try {
-        // 弹出一确认对话框
         await ElMessageBox.confirm(
           `确定要清理${blacklistForm.expire_days === 'all' ? '所有' : blacklistForm.expire_days + '天前'}的过期规则吗?`,
           '警告',
@@ -1200,25 +1205,27 @@ export default {
             cancelButtonText: '取消',
             type: 'warning'
           }
-        )
+        );
 
-        // 从expiredRules中提取所有ID
-        const idsToDelete = expiredRules.value.map(rule => rule.id)
-
-        // 检查
+        const idsToDelete = expiredRules.value.map(rule => rule.id);
         if (idsToDelete.length === 0) {
-          ElMessage.warning('没有可清理的过期规则')
-          return
+          ElMessage.warning('没有可清理的过期规则');
+          return;
         }
-        
-        // 执行清除操作
-        const response = await api.cleanExpiredRules(idsToDelete)
-        const deletedCount = response.data?.deleted || 0
-        ElMessage.success(`成功清理${deletedCount}条过期规则`)
-        fetchExpiredRules() // 刷新列表
+
+        try {
+          const response = await api.cleanExpiredRules(idsToDelete);
+          if (response.status === 200) {
+            ElMessage.success(`成功清理${idsToDelete.length}条过期规则`);
+            await Promise.all([fetchExpiredRules(), fetchRules()]);
+          }
+        } catch (error) {
+          console.error('清理错误详情:', error);
+          ElMessage.error(`清理失败: ${error.response?.data?.message || error.message}`);
+        }
       } catch (error) {
         if (error !== 'cancel') {
-          ElMessage.error('清理失败: ' + error.message)
+          console.error('用户确认后错误:', error);
         }
       }
     }
@@ -1230,14 +1237,25 @@ export default {
           confirmButtonText: '确定',
           cancelButtonText: '取消',
           type: 'warning'
-        })
+        });
         
-        await api.deleteRule(id)
-        ElMessage.success('强制删除成功')
-        fetchExpiredRules()
+        // 添加调试信息
+        console.log('Deleting rule with ID:', id);
+        
+        await api.deleteRule(id);
+        ElMessage.success('强制删除成功');
+        
+        // 同时刷新规则列表和过期规则列表
+        await Promise.all([
+          fetchRules(),
+          fetchExpiredRules()
+        ]);
       } catch (error) {
         if (error !== 'cancel') {
-          ElMessage.error('删除失败: ' + error.message)
+          console.error('Delete error details:', {
+            error: error.response?.data || error.message
+          });
+          ElMessage.error(`删除失败: ${error.response?.data?.message || error.message}`);
         }
       }
     }

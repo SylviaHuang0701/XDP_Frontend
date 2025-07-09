@@ -459,7 +459,10 @@ export default {
       nextTick(() => {
         if (!trafficChart.value) return
         
-        const chart = echarts.init(trafficChart.value)
+        let chart = echarts.getInstanceByDom(trafficChart.value)
+        if (!chart) {
+          chart = echarts.init(trafficChart.value)
+        }
         
         // 根据时间范围决定标记点和标记线的显示策略
         const markConfig = {
@@ -491,10 +494,11 @@ export default {
             formatter: params => {
               let str = `<div>时间: ${params[0].axisValue}</div>`
               params.forEach(item => {
+                let value = Array.isArray(item.data) ? item.data[1] : item.data
                 if (item.seriesName === '字节数') {
-                  str += `<div>${item.marker}${item.seriesName}: ${formatBytes(item.data[1])}</div>`
+                  str += `<div>${item.marker}${item.seriesName}: ${formatBytes(value)}</div>`
                 } else {
-                  str += `<div>${item.marker}${item.seriesName}: ${item.data[1]}</div>`
+                  str += `<div>${item.marker}${item.seriesName}: ${value}</div>`
                 }
               })
               return str
@@ -503,7 +507,10 @@ export default {
           dataZoom: [
             {
               type: 'inside',
-              yAxisIndex: 0, // 控制第一个yAxis
+              start: 0,
+              end: 100
+            },
+            {
               start: 0,
               end: 100
             }
@@ -513,7 +520,7 @@ export default {
             data: trafficData.value.map(d => d.timeLabel),
             axisLabel: { 
               rotate: 45,
-              interval: config.labelInterval
+              interval: 0 // 显示所有标签
             }
           },
           yAxis: [

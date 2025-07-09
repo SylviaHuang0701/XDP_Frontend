@@ -55,7 +55,6 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="priority" label="优先级" width="100" sortable />
         <!-- 创建时间支持升、降序排列 -->
         <el-table-column prop="created_at" label="创建时间" width="180" sortable>
           <template #default="{ row }">
@@ -602,7 +601,6 @@ export default {
       dst_port: 'any',
       protocol: 'tcp',
       action: 'pass',
-      // priority: 100,
       expire_at: null,
       created_at: null,
       updated_at: null,
@@ -610,17 +608,35 @@ export default {
       domain: null
     })
 
-    // 协议映射表
-    const protocolMap = {
-      // 名称映射
-      // 'tcp': '6',
-      // 'udp': '17',
-      // 'icmp': '1',
-      // 'any': 'any',
-      // 数字映射
+    // 协议相关映射
+    // 1. 协议名称到协议号
+    const protocolToNumber = {
+      'tcp': 6,
+      'udp': 17,
+      'icmp': 1,
+      'any': 0,
+      '6': 6,
+      '17': 17,
+      '1': 1,
+      '0': 0
+    }
+    // 2. 协议号到协议名称
+    const protocolNumberToName = {
+      6: 'tcp',
+      17: 'udp',
+      1: 'icmp',
+      0: 'any'
+    }
+    // 3. 协议名称到标准名称（小写）
+    const protocolNameMap = {
+      'tcp': 'tcp',
+      'udp': 'udp',
+      'icmp': 'icmp',
+      'any': 'any',
       '6': 'tcp',
       '17': 'udp',
-      '1': 'icmp'
+      '1': 'icmp',
+      '0': 'any'
     }
 
 
@@ -710,27 +726,11 @@ export default {
       }
     }
 
-    // 协议名称到协议号的映射
-    const protocolToNumber = {
-      'tcp': 6,
-      'udp': 17,
-      'icmp': 1,
-      'any': 0
-    }
-
-    // 协议号到协议名称的映射
-    const protocolNumberToName = {
-      6: 'tcp',
-      17: 'udp',
-      1: 'icmp',
-      0: 'any'
-    }
-
     // 将协议号转换为协议名称
     const getProtocolName = (protocolNumber) => {
       if (typeof protocolNumber === 'string') {
-        // 如果已经是字符串，直接返回
-        return protocolNumber
+        // 如果已经是字符串，直接返回标准名称
+        return protocolNameMap[protocolNumber] || protocolNumber
       }
       return protocolNumberToName[protocolNumber] || 'unknown'
     }
@@ -840,10 +840,6 @@ export default {
       action: [
         { required: true, message: '请选择动作', trigger: 'change' }
       ]
-      // priority: [
-      //   { required: true, message: '请输入优先级', trigger: 'blur' },
-      //   { type: 'number', min: 0, max: 1000, message: '优先级范围0-1000', trigger: 'blur' }
-      // ]
     })
 
     
@@ -905,17 +901,14 @@ export default {
     // 协议变更处理
     const handleProtocolChange = (value) => {
       const protocol = value?.toLowerCase()
-      
       // 如果协议不支持端口，清空端口值
       if (!isPortProtocol.value) {
         ruleForm.src_port = 'any'
         ruleForm.dst_port = 'any'
       }
-      
       // 自动转换协议格式
-      if (protocolMap[protocol]) {
-        // 统一转换为小写名称：
-        ruleForm.protocol = protocolMap[protocol] === protocol ? protocol : protocolMap[protocol]
+      if (protocolNameMap[protocol]) {
+        ruleForm.protocol = protocolNameMap[protocol]
       }
     }
 
@@ -956,7 +949,6 @@ export default {
             dst_port,
             domain: rule.domain || 'any',
             protocol: getProtocolName(rule.protocol),
-            priority: 100 // 默认优先级，因为后端没有这个字段
           }
         })
         
@@ -1004,7 +996,6 @@ export default {
       dst_port: 'any',
       protocol: 'tcp',
       action: 'pass',
-      // priority: 100,
       expire_at: null,
       created_at: null,
       updated_at: null,
@@ -1035,7 +1026,6 @@ export default {
         protocol: getProtocolName(row.protocol) || 'tcp',
         action: row.action || 'pass',
         domain: row.domain || 'any',
-        // priority: row.priority || 100,
         expire_at: row.expire_at || null
       })
       dialogVisible.value = true

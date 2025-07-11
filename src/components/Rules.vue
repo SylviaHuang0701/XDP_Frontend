@@ -1,5 +1,5 @@
 <template>
-  <el-card>
+  <el-card style="width: 960px;">
     <h2>规则管理</h2>
     <el-card shadow="never" style="margin-bottom: 1em;">
       <!-- 规则列表 -->
@@ -219,18 +219,17 @@
       <el-col :span="12">
         <el-card shadow="never" style="height: 100%;">
           <h4>当前默认规则说明</h4>
-          <div style="margin-top: 10px;">
+          <div style="margin-top: 10px; text-align: left;">
             <p><strong>动作：</strong>{{ ConfirmdefaultRule.action === 'pass' ? '允许' : '拒绝' }}</p>
             <p><strong>描述：</strong>{{ ConfirmdefaultRule.desc }}</p>
-            <p><strong>效果：</strong></p>
-            <ul>
-              <li v-if="ConfirmdefaultRule.action === 'pass'">
+            <p><strong>效果：</strong>
+              <span  v-if="ConfirmdefaultRule.action === 'pass'">
                 所有未匹配到具体规则的流量将被<el-tag type="success">允许通过</el-tag>
-              </li>
-              <li v-else>
+              </span >
+              <span  v-else>
                 所有未匹配到具体规则的流量将被<el-tag type="danger">拒绝拦截</el-tag>
-              </li>
-            </ul>
+              </span >
+            </p>
           </div>
         </el-card>
       </el-col>

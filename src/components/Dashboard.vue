@@ -344,12 +344,12 @@ export default {
           let timeLabel = ''
           if (timeRange.value === '5min') {
             // 5分钟模式下显示秒数
-            timeLabel = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            timeLabel = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
           } else if (intervalMs < 60 * 60 * 1000) {
-            timeLabel = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            timeLabel = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
           } else {
-            timeLabel = dateObj.toLocaleDateString([], { month: '2-digit', day: '2-digit' }) + ' ' + 
-                      dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            timeLabel = dateObj.toLocaleDateString([], { month: '2-digit', day: '2-digit', hour12: false }) + ' ' + 
+                      dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
           }
           arr.push({
             timestamp: t,
@@ -464,31 +464,40 @@ export default {
           chart = echarts.init(trafficChart.value)
         }
         
-        // 根据时间范围决定标记点和标记线的显示策略
+        // Calculate interval to show approximately 5 labels
+        const dataLength = trafficData.value.length
+        const labelInterval = Math.max(1, Math.floor(dataLength / 5))
+        
         const markConfig = {
           '5min': {
-            showMarkPoint: true,
+            showMarkPoint: false, // Disabled mark points
             showMarkLine: true,
             showSymbol: true,
-            labelInterval: 5
           },
           '1h': {
-            showMarkPoint: true,
+            showMarkPoint: false,
             showMarkLine: true,
             showSymbol: false,
-            labelInterval: 12  // 每小时显示5个标签(60/5=12)
           },
           '24h': {
             showMarkPoint: false,
             showMarkLine: false,
             showSymbol: false,
-            labelInterval: 6   // 每4小时显示一个标签(24/4=6)
           }
         }
         
         const config = markConfig[timeRange.value] || markConfig['5min']
         
+        // Calculate average speed (bytes per second)
+        const totalBytes = trafficData.value.reduce((sum, d) => sum + d.bytes, 0)
+        const avgBytesPerSecond = totalBytes / trafficData.value.length
+        
         chart.setOption({
+          grid: {
+            top: '15%',
+            bottom: '25%',
+            containLabel: true
+          },
           tooltip: {
             trigger: 'axis',
             formatter: params => {
@@ -496,7 +505,7 @@ export default {
               params.forEach(item => {
                 let value = Array.isArray(item.data) ? item.data[1] : item.data
                 if (item.seriesName === '字节数') {
-                  str += `<div>${item.marker}${item.seriesName}: ${formatBytes(value)}</div>`
+                  str += `<div>${item.marker}${item.seriesName}: ${formatBytes(value)}/s</div>`
                 } else {
                   str += `<div>${item.marker}${item.seriesName}: ${value}</div>`
                 }
@@ -519,33 +528,87 @@ export default {
             type: 'category',
             data: trafficData.value.map(d => d.timeLabel),
             axisLabel: { 
-              rotate: 45,
-              interval: 0 // 显示所有标签
+              interval: labelInterval, // Show approximately 5 labels
+              margin: 15
+            },
+            axisTick: {
+              alignWithLabel: true
             }
           },
           yAxis: [
-            { type: 'value', name: '字节数' },
-            { type: 'value', name: '包数' }
+            { 
+              type: 'value', 
+              name: '字节数/s',
+              axisLabel: {
+                margin: 15,
+                formatter: function(value) {
+                  return formatBytes(value, true) + '/s';
+                }
+              },
+              splitLine: {
+                show: true
+              }
+            },
+            { 
+              type: 'value', 
+              name: '包数',
+              axisLabel: {
+                margin: 15
+              },
+              splitLine: {
+                show: false
+              }
+            }
           ],
           series: [
             {
               name: '字节数',
               type: 'line',
               data: trafficData.value.map(d => [d.timeLabel, d.bytes]),
-              markPoint: config.showMarkPoint ? {
-                data: [
-                  { type: 'max', name: '最大值' },
-                  { type: 'min', name: '最小值' }
-                ],
-                symbolSize: 40,
-                label: {
-                  formatter: '{b}'
-                }
-              } : null,
+              markPoint: {
+                // Show average speed with bubble background at 10% position
+                data: config.showMarkLine ? [
+                  {
+                    name: '平均速度',
+                    coord: [Math.floor(trafficData.value.length * 0.1), avgBytesPerSecond],
+                    symbol: 'roundRect',
+                    symbolSize: [80, 30],
+                    itemStyle: {
+                      color: 'rgba(64, 158, 255, 0.3)',
+                      borderColor: '#409EFF',
+                      borderWidth: 2,
+                      shadowBlur: 10,
+                      shadowColor: 'rgba(0, 0, 0, 0.3)'
+                    },
+                    label: {
+                      show: true,
+                      formatter: function(params) {
+                        return formatBytes(avgBytesPerSecond) + '/s';
+                      },
+                      color: '#fff',
+                      fontSize: 12,
+                      fontWeight: 'bold',
+                      position: 'inside'
+                    }
+                  }
+                ] : [],
+              },
               markLine: config.showMarkLine ? {
                 data: [
-                  { type: 'average', name: '平均值' }
-                ]
+                  {
+                    yAxis: avgBytesPerSecond,
+                    name: '平均速度',
+                    lineStyle: {
+                      type: 'dashed',
+                      color: '#409EFF',
+                      width: 2
+                    },
+                    label: {
+                      show: false // Hide line label since we show it in markPoint
+                    }
+                  }
+                ],
+                silent: true
               } : null,
               showSymbol: config.showSymbol,
               symbol: 'circle',
@@ -565,21 +628,8 @@ export default {
               type: 'line',
               yAxisIndex: 1,
               data: trafficData.value.map(d => [d.timeLabel, d.packets]),
-              markPoint: config.showMarkPoint ? {
-                data: [
-                  { type: 'max', name: '最大值' },
-                  { type: 'min', name: '最小值' }
-                ],
-                symbolSize: 40,
-                label: {
-                  formatter: '{b}'
-                }
-              } : null,
-              markLine: config.showMarkLine ? {
-                data: [
-                  { type: 'average', name: '平均值' }
-                ]
-              } : null,
+              markPoint: null, // Disabled for packets series
+              markLine: null, // Disabled for packets series
               showSymbol: config.showSymbol,
               symbol: 'circle',
               symbolSize: 6,
@@ -593,22 +643,9 @@ export default {
                 ])
               } : null
             }
-          ],
-          // 添加数据缩放功能，特别适用于24小时视图
-          dataZoom: timeRange.value === '24h' ? [
-            {
-              type: 'inside',
-              start: 0,
-              end: 100
-            },
-            {
-              start: 0,
-              end: 100
-            }
-          ] : null
+          ]
         })
         
-        // 窗口大小变化时重新调整图表
         window.addEventListener('resize', function() {
           chart.resize()
         })
@@ -792,10 +829,13 @@ export default {
 <style scoped>
 .dashboard {
   padding: 20px;
+  max-width: 1200px; /* Set your desired fixed width */
+  margin: 0 auto; /* Center the dashboard */
 }
 
 .stats-row {
   margin-bottom: 20px;
+  width: 960px;
 }
 
 .stat-card {

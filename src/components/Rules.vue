@@ -1,5 +1,5 @@
 <template>
-  <el-card>
+  <el-card style="width: 960px;">
     <h2>规则管理</h2>
     <el-card shadow="never" style="margin-bottom: 1em;">
       <!-- 规则列表 -->
@@ -55,7 +55,6 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="priority" label="优先级" width="100" sortable />
         <!-- 创建时间支持升、降序排列 -->
         <el-table-column prop="created_at" label="创建时间" width="180" sortable>
           <template #default="{ row }">
@@ -134,7 +133,7 @@
         <el-form-item label="协议" prop="protocol">
           <el-input 
             v-model="ruleForm.protocol" 
-            placeholder="请输入协议名称(如TCP, UDP)或协议号(如6, 17)"
+            placeholder="请输入协议名称(如TCP, UDP)或协议号(如6, 17)，留空表示any"
             @change="handleProtocolChange"
           />
         </el-form-item>
@@ -220,18 +219,17 @@
       <el-col :span="12">
         <el-card shadow="never" style="height: 100%;">
           <h4>当前默认规则说明</h4>
-          <div style="margin-top: 10px;">
+          <div style="margin-top: 10px; text-align: left;">
             <p><strong>动作：</strong>{{ ConfirmdefaultRule.action === 'pass' ? '允许' : '拒绝' }}</p>
             <p><strong>描述：</strong>{{ ConfirmdefaultRule.desc }}</p>
-            <p><strong>效果：</strong></p>
-            <ul>
-              <li v-if="ConfirmdefaultRule.action === 'pass'">
+            <p><strong>效果：</strong>
+              <span  v-if="ConfirmdefaultRule.action === 'pass'">
                 所有未匹配到具体规则的流量将被<el-tag type="success">允许通过</el-tag>
-              </li>
-              <li v-else>
+              </span >
+              <span  v-else>
                 所有未匹配到具体规则的流量将被<el-tag type="danger">拒绝拦截</el-tag>
-              </li>
-            </ul>
+              </span >
+            </p>
           </div>
         </el-card>
       </el-col>
@@ -305,7 +303,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { Search } from "@element-plus/icons-vue";
-import { API_BASE_URL, API_ENDPOINTS } from '../config.js'
+import { API_BASE_URL, API_ENDPOINTS, protocolNumberToName,protocolNameToNumber } from '../config.js'
 
 const api = {
   getRules: async (page = 1, pageSize = 20) => {
@@ -513,25 +511,6 @@ const validatePort = (rule, value) => {
   });
 };
 
-const validateProtocol = (rule, value) => {
-  return new Promise((resolve, reject) => {
-    if (!value) {
-      reject(new Error('请输入协议'))
-      return
-    }
-
-    const lowerValue = value.toLowerCase()
-    const validateProtocols = ['tcp', 'udp', 'icmp', 'any', '6', '17', '1']
-
-    if (!validateProtocols.includes(lowerValue)) {
-      reject(new Error('请输入有效的协议名称或协议号'))
-    } else {
-      resolve()
-    }
-
-  })
-}
-
 // 解析IP/端口范围
 function parsePortRange(input) {
   if (!input || input === 'any') return [0, 0];
@@ -580,6 +559,29 @@ export default {
     const currentPage = ref(1)
     const pageSize = ref(10)
     const totalRules = ref(0)
+
+    const dialogVisible = ref(false)
+    const isEdit = ref(false)
+    const currentRuleId = ref(null)
+    const ruleFormRef = ref(null)
+
+    // 表单数据
+    const ruleForm = reactive({
+      id: 0,
+      desc: '',
+      src_ip_start: 'any', 
+      dst_ip: 'any',
+      src_port: 'any',
+      dst_port: 'any',
+      protocol: 'tcp',
+      originalProtocol: 'tcp', // 保存原始输入
+      action: 'pass',
+      expire_at: null,
+      created_at: null,
+      updated_at: null,
+      text: null,
+      domain: null
+    })
     
     // 默认规则
     const defaultRule = reactive({
@@ -593,48 +595,125 @@ export default {
       desc: '默认通过所有流量'
     })
 
-    // 计算属性判断当前协议是否支持端口
-    const isPortProtocol = computed(() => {
-      const protocol = ruleForm.protocol?.toLowerCase()
-      return protocol === 'tcp' || protocol === 'udp' || protocol === '6' || protocol === '17'
-    })
-    
-    
-    // 对话框相关
-    const dialogVisible = ref(false)
-    const isEdit = ref(false)
-    const currentRuleId = ref(null)
-    const ruleFormRef = ref(null)  // 表单引用
-    const ruleForm = reactive({
-      id: 0,
-      desc: '',
-      src_ip_start: 'any',
-      dst_ip: 'any',
-      src_port: 'any',
-      dst_port: 'any',
-      protocol: 'tcp',
-      action: 'pass',
-      // priority: 100,
-      expire_at: null,
-      created_at: null,
-      updated_at: null,
-      text: null,
-      domain: null
-    })
-
-    // 协议映射表
-    const protocolMap = {
-      // 名称映射
-      // 'tcp': '6',
-      // 'udp': '17',
-      // 'icmp': '1',
-      // 'any': 'any',
-      // 数字映射
-      '6': 'tcp',
-      '17': 'udp',
-      '1': 'icmp'
+    // 协议输入支持 0-256 数字或 protocolNumberToName 里的字符串
+    const getProtocolNumber = (input) => {
+      if (!input) throw new Error('协议不能为空');
+      if (typeof input === 'number' || /^\d+$/.test(input)) {
+        const num = parseInt(input, 10);
+        if (num >= 0 && num <= 256) return num;
+        throw new Error('协议号必须在0-256之间，或使用256表示any');
+      }
+      const name = input.toLowerCase();
+      if (protocolNameToNumber.hasOwnProperty(name)) return protocolNameToNumber[name];
+      const idx = protocolNumberToName.findIndex(n => n.toLowerCase() === name);
+      if (idx !== -1) return idx;
+      throw new Error('不支持的协议名称或协议号');
     }
 
+    // 只有 TCP/UDP 支持端口
+    const isPortProtocol = computed(() => {
+      try {
+        const protoNum = getProtocolNumber(ruleForm.protocol);
+        return protoNum === 6 || protoNum === 17;
+      } catch { return false; }
+    });
+
+    // 协议显示
+    const getProtocolName = (protocolNumber) => {
+      if (typeof protocolNumber === 'string' && /^\d+$/.test(protocolNumber)) {
+        protocolNumber = parseInt(protocolNumber, 10);
+      }
+      return protocolNumberToName[protocolNumber] || protocolNumber;
+    }
+
+    // 协议变更处理
+    const handleProtocolChange = (value) => {
+      const protocol = value?.toLowerCase?.() || '';
+      // 保存原始输入
+      ruleForm.originalProtocol = value;
+      
+      // 如果协议不支持端口，清空端口值
+      if (!isPortProtocol.value) {
+        ruleForm.src_port = 'any';
+        ruleForm.dst_port = 'any';
+      }
+      
+      // 自动转换协议格式
+      if (protocol && protocol !== 'any') {
+        // 如果输入的是数字且在0-256范围内，自动映射为协议名（256表示any）
+        if (/^\d+$/.test(protocol)) {
+          const num = parseInt(protocol, 10);
+          if (num >= 0 && num <= 255) {
+            ruleForm.protocol = protocolNumberToName[num].toLowerCase();
+            return;
+          } else if (num === 256) {
+            ruleForm.protocol = 'any';
+            ruleForm.originalProtocol = '256';
+            return;
+          }
+        }
+        // 如果输入的是协议名，转为标准小写名
+        if (protocolNameToNumber.hasOwnProperty(protocol)) {
+          ruleForm.protocol = protocol;
+        }
+      } else if (!protocol || protocol === 'any') {
+        // 留空或输入 any，设置为 any
+        ruleForm.protocol = 'any';
+        ruleForm.originalProtocol = '256';
+      }
+    }
+
+    // 表单协议校验
+    const validateProtocol = (rule, value) => {
+      return new Promise((resolve, reject) => {
+        if (!value) return resolve(); // 留空表示any，不验证
+        try { getProtocolNumber(value); resolve(); }
+        catch (e) { reject(new Error(e.message)); }
+      });
+    }
+
+    // 构建规则载荷函数
+    const buildRulePayload = (form) => {
+      const payload = { action: form.action, desc: form.desc };
+      
+      // 使用原始输入获取协议号
+      let protoNum;
+      if (form.originalProtocol && /^\d+$/.test(form.originalProtocol)) {
+        // 如果原始输入是数字，直接使用
+        protoNum = parseInt(form.originalProtocol, 10);
+      } else if (form.protocol === 'any' || !form.protocol) {
+        // any 协议对应协议号 256
+        protoNum = 256;
+      } else {
+        // 否则从协议名获取协议号
+        protoNum = getProtocolNumber(form.protocol);
+      }
+      
+      payload.protocol = protoNum;
+      if (protoNum === 6 || protoNum === 17) {
+        const srcPortRange = parsePortRange(form.src_port);
+        if (srcPortRange[0] !== 0 || srcPortRange[1] !== 0) {
+          if (protoNum === 6) payload.tcp_src = srcPortRange;
+          if (protoNum === 17) payload.udp_src = srcPortRange;
+        }
+        const dstPortRange = parsePortRange(form.dst_port);
+        if (dstPortRange[0] !== 0 || dstPortRange[1] !== 0) {
+          if (protoNum === 6) payload.tcp_dst = dstPortRange;
+          if (protoNum === 17) payload.udp_dst = dstPortRange;
+        }
+      }
+      if (form.domain && form.domain !== 'any') payload.domain = form.domain;
+      if (form.expire_at) payload.expire_at = form.expire_at.replace(' ', 'T');
+      const srcIpRange = parseIpRange(form.src_ip_start);
+      if (srcIpRange.error) throw new Error(`源IP地址错误: ${srcIpRange.error}`);
+      if (srcIpRange.ipv4 && srcIpRange.ipv4[0] !== 'any') payload.src = srcIpRange.ipv4;
+      if (srcIpRange.ipv6 && srcIpRange.ipv6[0] !== 'any') payload.src = srcIpRange.ipv6;
+      const dstIpRange = parseIpRange(form.dst_ip);
+      if (dstIpRange.error) throw new Error(`目标IP地址错误: ${dstIpRange.error}`);
+      if (dstIpRange.ipv4 && dstIpRange.ipv4[0] !== 'any') payload.dst = dstIpRange.ipv4;
+      if (dstIpRange.ipv6 && dstIpRange.ipv6[0] !== 'any') payload.dst = dstIpRange.ipv6;
+      return payload;
+    }
 
     // 判断IP地址是否有效
     const isValidIPv4 = (ip) => {
@@ -722,107 +801,6 @@ export default {
       }
     }
 
-    // 协议名称到协议号的映射
-    const protocolToNumber = {
-      'tcp': 6,
-      'udp': 17,
-      'icmp': 1,
-      'any': 0
-    }
-
-    // 协议号到协议名称的映射
-    const protocolNumberToName = {
-      6: 'tcp',
-      17: 'udp',
-      1: 'icmp',
-      0: 'any'
-    }
-
-    // 将协议号转换为协议名称
-    const getProtocolName = (protocolNumber) => {
-      if (typeof protocolNumber === 'string') {
-        // 如果已经是字符串，直接返回
-        return protocolNumber
-      }
-      return protocolNumberToName[protocolNumber] || 'unknown'
-    }
-
-    // 构建规则载荷函数
-    const buildRulePayload = (form) => {
-      const payload = {
-        action: form.action,
-        desc: form.desc,
-      };
-
-      // 转换协议为数字
-      const protocol = form.protocol?.toLowerCase();
-      if (protocolToNumber.hasOwnProperty(protocol)) {
-        payload.protocol = protocolToNumber[protocol];
-      } else if (!isNaN(parseInt(protocol))) {
-        // 如果已经是数字，直接使用
-        payload.protocol = parseInt(protocol);
-      } else {
-        throw new Error('无效的协议类型');
-      }
-
-      // 解析源IP地址
-      const srcIpRange = parseIpRange(form.src_ip_start);
-      if (srcIpRange.error) {
-        throw new Error(`源IP地址错误: ${srcIpRange.error}`);
-      }
-      if (srcIpRange.ipv4 && srcIpRange.ipv4[0] !== 'any') {
-        payload.src = srcIpRange.ipv4;
-      }
-      if (srcIpRange.ipv6 && srcIpRange.ipv6[0] !== 'any') {
-        payload.src = srcIpRange.ipv6;
-      }
-
-      // 解析目标IP地址
-      const dstIpRange = parseIpRange(form.dst_ip);
-      if (dstIpRange.error) {
-        throw new Error(`目标IP地址错误: ${dstIpRange.error}`);
-      }
-      if (dstIpRange.ipv4 && dstIpRange.ipv4[0] !== 'any') {
-        payload.dst = dstIpRange.ipv4;
-      }
-      if (dstIpRange.ipv6 && dstIpRange.ipv6[0] !== 'any') {
-        payload.dst = dstIpRange.ipv6;
-      }
-
-      // 端口范围 - 根据协议类型设置不同的字段
-      if (payload.protocol && [6, 17].includes(payload.protocol)) {
-        const srcPortRange = parsePortRange(form.src_port);
-        if (srcPortRange[0] !== 0 || srcPortRange[1] !== 0) {
-          if (payload.protocol === 6) {
-            payload.tcp_src = srcPortRange;
-          } else if (payload.protocol === 17) {
-            payload.udp_src = srcPortRange;
-          }
-        }
-        
-        const dstPortRange = parsePortRange(form.dst_port);
-        if (dstPortRange[0] !== 0 || dstPortRange[1] !== 0) {
-          if (payload.protocol === 6) {
-            payload.tcp_dst = dstPortRange;
-          } else if (payload.protocol === 17) {
-            payload.udp_dst = dstPortRange;
-          }
-        }
-      }
-
-      // 域名
-      if (form.domain && form.domain !== 'any') {
-        payload.domain = form.domain;
-      }
-
-      // 过期时间
-      if (form.expire_at) {
-        payload.expire_at = form.expire_at.replace(' ', 'T');
-      }
-
-      return payload;
-    }
-    
     // 表单验证规则
     const formRules = reactive({
       desc: [
@@ -830,7 +808,7 @@ export default {
         { min: 3, max: 50, message: '长度在3到50个字符', trigger: 'blur' }
       ],
       protocol: [
-        { required: true, message: '请输入协议名称(TCP, UDP, ICMP, any)或协议号(6, 17, 1)', trigger: 'blur' },
+        { message: '请输入协议名称(TCP, UDP, ICMP, any等)或协议号(0-255)，留空表示any', trigger: 'blur' },
         { validator: validateProtocol, trigger: 'blur' }
       ],
       src_ip_start: [
@@ -852,10 +830,6 @@ export default {
       action: [
         { required: true, message: '请选择动作', trigger: 'change' }
       ]
-      // priority: [
-      //   { required: true, message: '请输入优先级', trigger: 'blur' },
-      //   { type: 'number', min: 0, max: 1000, message: '优先级范围0-1000', trigger: 'blur' }
-      // ]
     })
 
     
@@ -914,23 +888,6 @@ export default {
     }
 
 
-    // 协议变更处理
-    const handleProtocolChange = (value) => {
-      const protocol = value?.toLowerCase()
-      
-      // 如果协议不支持端口，清空端口值
-      if (!isPortProtocol.value) {
-        ruleForm.src_port = 'any'
-        ruleForm.dst_port = 'any'
-      }
-      
-      // 自动转换协议格式
-      if (protocolMap[protocol]) {
-        // 统一转换为小写名称：
-        ruleForm.protocol = protocolMap[protocol] === protocol ? protocol : protocolMap[protocol]
-      }
-    }
-
     // 获取规则列表数据
     const fetchRules = async () => {
       loading.value = true
@@ -968,7 +925,6 @@ export default {
             dst_port,
             domain: rule.domain || 'any',
             protocol: getProtocolName(rule.protocol),
-            priority: 100 // 默认优先级，因为后端没有这个字段
           }
         })
         
@@ -1016,7 +972,6 @@ export default {
       dst_port: 'any',
       protocol: 'tcp',
       action: 'pass',
-      // priority: 100,
       expire_at: null,
       created_at: null,
       updated_at: null,
@@ -1047,7 +1002,6 @@ export default {
         protocol: getProtocolName(row.protocol) || 'tcp',
         action: row.action || 'pass',
         domain: row.domain || 'any',
-        // priority: row.priority || 100,
         expire_at: row.expire_at || null
       })
       dialogVisible.value = true
@@ -1123,7 +1077,7 @@ export default {
         // 构建发送给后端的默认规则数据（协议名称转换为协议号）
         const defaultRulePayload = {
           action: defaultRule.action,
-          protocol: protocolToNumber[defaultRule.protocol] || 0,
+          protocol: protocolNameToNumber[defaultRule.protocol] || 0,
           desc: defaultRule.desc
         }
         

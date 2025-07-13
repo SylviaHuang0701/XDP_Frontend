@@ -1,7 +1,7 @@
 <!-- 日志记录页面实现 -->
 <!-- 定义界面视觉结构 -->
 <template>
-  <el-card>
+  <el-card style="width: 960px;">
     <h2>日志记录</h2>
     <el-card shadow="never"> <!-- 内层不要阴影 -->
       <h3>日志列表</h3>

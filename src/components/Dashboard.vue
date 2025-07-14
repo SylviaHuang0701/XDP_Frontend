@@ -9,7 +9,7 @@
                         <el-icon><DataLine /></el-icon>
                     </div>
                     <div class="stat-info">
-                        <div class="stat-value">{{ formatBytes(stats.bandwidth) }}/s</div>
+                        <div class="stat-value">{{ formatBytes(stats.bandwidth) }}</div>
                         <div class="stat-label">实时带宽</div>
                     </div>
                 </div>
@@ -36,7 +36,7 @@
                     </div>
                     <div class="stat-info">
                         <div class="stat-value">{{ stats.alerts }}</div>
-                        <div class="stat-label">告警数量</div>
+                        <div class="stat-label">日志数量</div>
                     </div>
                 </div>
             </el-card>
@@ -142,7 +142,7 @@
         <el-card class="alerts-card">
           <template #header>
             <div class="card-header">
-              <span>实时告警</span>
+              <span>实时日志</span>
               <el-button size="small" @click="clearAlerts">清空</el-button>
             </div>
           </template>
@@ -425,7 +425,7 @@ export default {
               params.forEach(item => {
                 let value = Array.isArray(item.data) ? item.data[1] : item.data
                 if (item.seriesName === '字节数') {
-                  str += `<div>${item.marker}${item.seriesName}: ${formatBytes(value)}/s</div>`
+                  str += `<div>${item.marker}${item.seriesName}: ${formatBytes(value)}</div>`
                 } else {
                   str += `<div>${item.marker}${item.seriesName}: ${value}</div>`
                 }

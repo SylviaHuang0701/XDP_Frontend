@@ -388,10 +388,9 @@ const api = {
   // 清理过期规则
   cleanExpiredRules: async (ruleIds) => {
     try {
-      // 尝试将ID作为查询参数发送
-      const response = await axios.delete(`${API_BASE_URL}${API_ENDPOINTS.RULES}`, {
-        params: { ids: ruleIds.join(',') }
-      });
+      const response = await axios.delete(`${API_BASE_URL}${API_ENDPOINTS.RULES}`,
+        {data: {id : ruleIds}} 
+      );
       return response;
     } catch (error) {
       console.error('Failed to clean expired rules:', error);
@@ -917,7 +916,7 @@ export default {
             dst_port = rule.udp_dst[0] === rule.udp_dst[1] ? rule.udp_dst[0].toString() : `${rule.udp_dst[0]}-${rule.udp_dst[1]}`
           }
 
-          if (src_ip === 'any' && dst_ip === 'any' && src_port === 'any' && dst_port === 'any') {
+          if (rule.protocol=== 'any' && rule.src_ip === 'any' && rule.dst_ip === 'any' && rule.src_port === 'any' && rule.dst_port === 'any') {
             console.warn('规则不能全部为 any:', rule)
           }
           
@@ -1022,6 +1021,7 @@ export default {
           await api.deleteRule(id)
           ElMessage.success('删除成功')
           fetchRules()
+          fetchExpiredRules()
         } catch (error) {
           ElMessage.error('删除失败: ' + error.message)
         } // 点击确定，删除规则
@@ -1042,6 +1042,7 @@ export default {
 
         // 检查所有字段是否为any
         const isAllAny = 
+          (ruleForm.protocol === 'any' || !ruleForm.protocol) &&
           (ruleForm.src_ip_start === 'any' || !ruleForm.src_ip_start) &&
           (ruleForm.dst_ip === 'any' || !ruleForm.dst_ip) &&
           (ruleForm.src_port === 'any' || !ruleForm.src_port) &&
@@ -1064,6 +1065,7 @@ export default {
         }
         dialogVisible.value = false
         fetchRules()
+        fetchExpiredRules()
       } catch (error) {
         if (error.name !== 'ValidationError') {
           ElMessage.error('操作失败: ' + error.message)
@@ -1188,7 +1190,7 @@ export default {
           const response = await api.cleanExpiredRules(idsToDelete);
           if (response.status === 200) {
             ElMessage.success(`成功清理${idsToDelete.length}条过期规则`);
-            await Promise.all([fetchExpiredRules(), fetchRules()]);
+            await Promise.all([fetchRules(), fetchExpiredRules()]);
           }
         } catch (error) {
           console.error('清理错误详情:', error);

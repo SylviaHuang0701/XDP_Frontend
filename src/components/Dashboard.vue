@@ -128,20 +128,12 @@
           </template>
           <div class="connection-stats">
             <div class="connection-item">
-              <span class="label">ESTABLISHED:</span>
-              <span class="value">{{ connectionStats.established }}</span>
+              <span class="label">CONNECTED:</span>
+              <span class="value">{{ connectionStats.connected }}</span>
             </div>
             <div class="connection-item">
-              <span class="label">SYN_SENT:</span>
-              <span class="value">{{ connectionStats.synSent }}</span>
-            </div>
-            <div class="connection-item">
-              <span class="label">TIME_WAIT:</span>
-              <span class="value">{{ connectionStats.timeWait }}</span>
-            </div>
-            <div class="connection-item">
-              <span class="label">CLOSE_WAIT:</span>
-              <span class="value">{{ connectionStats.closeWait }}</span>
+              <span class="label">SYN_RECEIVED:</span>
+              <span class="value">{{ connectionStats.synReceive }}</span>
             </div>
           </div>
         </el-card>
@@ -223,10 +215,8 @@ export default {
     
     const topIpList = ref([])
     const connectionStats = ref({
-      established: 0,
-      synSent: 0,
-      timeWait: 0,
-      closeWait: 0,
+      connected: 0,
+      synReceive: 0,
       others: 0
     })
     
@@ -294,13 +284,33 @@ export default {
         const response = await axios.get(`${API_BASE_URL}/status/`)
         const globalStatus = response.data
         
-        // 获取活跃规则数量
         const rulesResponse = await axios.get(`${API_BASE_URL}/rules/`)
         const activeRules = rulesResponse.data.rules ? rulesResponse.data.rules.length : 0
         
+        const tcpResponse = await axios.get(`${API_BASE_URL}/status/tcp_connections`)
+        const connections = tcpResponse.data.connections || []
+        
+        // 统计连接状态
+        const stateCounts = {
+          'CONNECTED': 0,
+          'SYN RECEIVED': 0
+        };
+        connections.forEach(conn => {
+          if (conn.state === 'Connected') {
+            stateCounts['CONNECTED']++;
+          } else if (conn.state === 'SYN Received') {
+            stateCounts['SYN RECEIVED']++;
+          }
+        });
+        connectionStats.value = {
+          connected: stateCounts['CONNECTED'],
+          synReceive: stateCounts['SYN RECEIVED'],
+          others: connections.length - stateCounts['CONNECTED'] - stateCounts['SYN RECEIVED']
+        };
+        
         stats.value = {
           bandwidth: globalStatus.bandwidth || 0,
-          connections: globalStatus.connections || 0,
+          connections: connections.length,
           alerts: alerts.value.length,
           activeRules: activeRules
         }
@@ -312,7 +322,7 @@ export default {
     const fetchTopIp = async () => {
       try {
         const response = await axios.get(`${API_BASE_URL}/status/top_ip?col=bytes&limit=3`)
-        topIpList.value = response.data.top || []
+        topIpList.value = (response.data.top || []).sort((a, b) => b.bytes - a.bytes)
       } catch (error) {
         console.error('获取Top IP失败:', error)
       }
@@ -658,19 +668,22 @@ export default {
         const connections = response.data.connections || []
         
         // 统计连接状态
-        const stateCounts = {}
+        const stateCounts = {
+          'CONNECTED': 0,
+          'SYN RECEIVED': 0
+        };
         connections.forEach(conn => {
-          const state = conn.state || 'UNKNOWN'
-          stateCounts[state] = (stateCounts[state] || 0) + 1
-        })
-        
+          if (conn.state === 'Connected') {
+            stateCounts['CONNECTED']++;
+          } else if (conn.state === 'SYN Received') {
+            stateCounts['SYN RECEIVED']++;
+          }
+        });
         connectionStats.value = {
-          established: stateCounts['ESTABLISHED'] || 0,
-          synSent: stateCounts['SYN_SENT'] || 0,
-          timeWait: stateCounts['TIME_WAIT'] || 0,
-          closeWait: stateCounts['CLOSE_WAIT'] || 0,
-          others: connections.length - (stateCounts['ESTABLISHED'] || 0) - (stateCounts['SYN_SENT'] || 0) - (stateCounts['TIME_WAIT'] || 0) - (stateCounts['CLOSE_WAIT'] || 0)
-        }
+          connected: stateCounts['CONNECTED'],
+          synReceive: stateCounts['SYN RECEIVED'],
+          others: connections.length - stateCounts['CONNECTED'] - stateCounts['SYN RECEIVED']
+        };
         
         // 更新连接状态
         const total = connections.length

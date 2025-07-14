@@ -1005,7 +1005,9 @@ export default {
         try {
           await api.deleteRule(id)
           ElMessage.success('删除成功')
+          // 同时刷新规则列表和小黑屋
           fetchRules()
+          fetchExpiredRules()
         } catch (error) {
           ElMessage.error('删除失败: ' + error.message)
         } // 点击确定，删除规则
@@ -1034,7 +1036,9 @@ export default {
           ElMessage.success('添加成功')
         }
         dialogVisible.value = false
+        // 同时刷新规则列表和小黑屋
         fetchRules()
+        fetchExpiredRules()
       } catch (error) {
         if (error.name !== 'ValidationError') {
           ElMessage.error('操作失败: ' + error.message)
@@ -1169,7 +1173,9 @@ export default {
         const response = await api.cleanExpiredRules(idsToDelete)
         const deletedCount = response.data?.deleted || 0
         ElMessage.success(`成功清理${deletedCount}条过期规则`)
-        fetchExpiredRules() // 刷新列表
+        // 同时刷新规则列表和小黑屋
+        fetchRules()
+        fetchExpiredRules()
       } catch (error) {
         if (error !== 'cancel') {
           ElMessage.error('清理失败: ' + error.message)
@@ -1188,6 +1194,8 @@ export default {
         
         await api.deleteRule(id)
         ElMessage.success('强制删除成功')
+        // 同时刷新规则列表和小黑屋
+        fetchRules()
         fetchExpiredRules()
       } catch (error) {
         if (error !== 'cancel') {

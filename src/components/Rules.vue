@@ -916,6 +916,10 @@ export default {
           } else if (rule.udp_dst) {
             dst_port = rule.udp_dst[0] === rule.udp_dst[1] ? rule.udp_dst[0].toString() : `${rule.udp_dst[0]}-${rule.udp_dst[1]}`
           }
+
+          if (src_ip === 'any' && dst_ip === 'any' && src_port === 'any' && dst_port === 'any') {
+            console.warn('规则不能全部为 any:', rule)
+          }
           
           return {
             ...rule,
@@ -1035,6 +1039,19 @@ export default {
     const submitForm = async () => {
       try {
         await ruleFormRef.value.validate()
+
+        // 检查所有字段是否为any
+        const isAllAny = 
+          (ruleForm.src_ip_start === 'any' || !ruleForm.src_ip_start) &&
+          (ruleForm.dst_ip === 'any' || !ruleForm.dst_ip) &&
+          (ruleForm.src_port === 'any' || !ruleForm.src_port) &&
+          (ruleForm.dst_port === 'any' || !ruleForm.dst_port);
+        
+        if (isAllAny) {
+          ElMessage.error('规则不能全部为 any，请至少指定一个条件')
+          return
+            }
+    
         // 自动转换表单为后端结构体格式
         const payload = buildRulePayload(ruleForm)
         console.log(payload)

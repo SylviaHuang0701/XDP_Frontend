@@ -221,6 +221,7 @@ export default {
     })
     
     const alerts = ref([])
+    const logTotal = ref(0)
     const timeRange = ref('5min')
     const trafficChart = ref(null)
     const trafficData = ref([])
@@ -307,13 +308,11 @@ export default {
           synReceive: stateCounts['SYN RECEIVED'],
           others: connections.length - stateCounts['CONNECTED'] - stateCounts['SYN RECEIVED']
         };
-        
-        stats.value = {
-          bandwidth: globalStatus.bandwidth || 0,
-          connections: connections.length,
-          alerts: alerts.value.length,
-          activeRules: activeRules
-        }
+        // 只更新非 alerts 字段
+        stats.value.bandwidth = globalStatus.bandwidth || 0
+        stats.value.connections = connections.length
+        stats.value.activeRules = activeRules
+        // 不要再设置 stats.value.alerts
       } catch (error) {
         console.error('获取统计数据失败:', error)
       }
@@ -625,9 +624,7 @@ export default {
           level: log.level || 'info',
           message: log.message
         }))
-        
-        // 更新告警数量
-        stats.value.alerts = alerts.value.length
+        stats.value.alerts = response.data.total
       } catch (error) {
         console.error('获取日志失败:', error)
       }

@@ -9,7 +9,7 @@
                         <el-icon><DataLine /></el-icon>
                     </div>
                     <div class="stat-info">
-                        <div class="stat-value">{{ formatBytes(stats.bandwidth) }}</div>
+                        <div class="stat-value">{{ formatBytes(stats.bandwidth) }}/s</div>
                         <div class="stat-label">实时带宽</div>
                     </div>
                 </div>
@@ -754,11 +754,17 @@ export default {
   padding: 20px;
   max-width: 1200px; /* Set your desired fixed width */
   margin: 0 auto; /* Center the dashboard */
+  box-sizing: border-box;
+}
+
+/* 强制所有子元素使用border-box */
+.dashboard * {
+  box-sizing: border-box;
 }
 
 .stats-row {
   margin-bottom: 20px;
-  width: 960px;
+  width: 100%;
 }
 
 .stat-card {
@@ -794,10 +800,32 @@ export default {
 
 .main-content {
   margin-bottom: 20px;
+  width: 100%;
+}
+
+/* 确保Element UI的栅格系统正确工作 */
+.main-content .el-row {
+  width: 100%;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.main-content .el-col {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.main-content .el-col:first-child {
+  padding-left: 0;
+}
+
+.main-content .el-col:last-child {
+  padding-right: 0;
 }
 
 .chart-card {
   margin-bottom: 20px;
+  width: 100%;
 }
 
 .card-header {
@@ -808,6 +836,7 @@ export default {
 
 .chart-container {
   height: 300px;
+  width: 100%;
 }
 
 .chart {
@@ -822,6 +851,7 @@ export default {
 
 .top-ip-card {
   margin-bottom: 20px;
+  width: 100%;
 }
 
 .rank-badge {
@@ -863,6 +893,7 @@ export default {
 
 .connections-card {
   margin-bottom: 20px;
+  width: 100%;
 }
 
 .connection-stats {
@@ -892,20 +923,65 @@ export default {
   color: #303133;
 }
 
-.alerts-card {
-  margin-bottom: 20px;
-}
-
 .alerts-list {
   max-height: 300px;
   overflow-y: auto;
+  box-sizing: border-box;
+  width: 100%;
+  /* Firefox 滚动条样式 */
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 transparent;
+  /* 确保内容不被滚动条遮挡 */
+  padding-right: 4px;
 }
 
+/* WebKit 浏览器滚动条样式 */
+.alerts-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.alerts-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.alerts-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.alerts-list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 修改 alert-item，确保不会被滚动条遮挡 */
 .alert-item {
   padding: 10px;
   margin-bottom: 10px;
+  margin-right: 2px; /* 减小右边距，因为滚动条更细了 */
   border-radius: 4px;
   border-left: 4px solid;
+}
+
+/* 确保右侧两个卡片宽度完全一致 */
+.connections-card,
+.alerts-card {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 200px;
+}
+
+/* 强制右侧栏保持一致的宽度 */
+.main-content .el-col:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0; /* 防止内容撑开容器 */
+  width: 100%;
+}
+
+/* 确保左侧内容区域也有正确的宽度 */
+.main-content .el-col:first-child {
+  width: 100%;
 }
 
 .alert-info {
@@ -972,5 +1048,15 @@ export default {
   flex: 1;
   font-size: 16px;
   color: #303133;
+}
+
+.dashboard .el-card {
+  width: 100% !important;
+}
+
+/* 确保所有卡片都有相同的外边距处理 */
+.dashboard .el-card .el-card__body {
+  padding: 20px;
+  box-sizing: border-box;
 }
 </style>

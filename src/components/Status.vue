@@ -44,7 +44,7 @@
           >
             <el-table-column prop="time" label="时间">
               <template #default="{ row }">
-                {{ new Date(row.time).toLocaleString() }}
+                {{ formatTime(row.time) }}
               </template>
             </el-table-column>
             <el-table-column prop="rule_desc" label="规则" />
@@ -58,6 +58,11 @@
                 >
                   {{ row.action }} <!-- 直接显示原始数据（pass/drop） -->
                 </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="proc_ns" label="处理时间">
+              <template #default="{ row }">
+                {{ row.proc_ns }} ns
               </template>
             </el-table-column>
           </el-table>
@@ -267,6 +272,29 @@ export default {
       fetchRuleMatches(false) // 不重置页码
     }
     
+    // 格式化时间显示
+    const formatTime = (timeString) => {
+      if (!timeString) return '-'
+      try {
+        const date = new Date(timeString)
+        // 检查日期是否有效
+        if (isNaN(date.getTime())) return timeString
+        
+        // 格式化为: 2025-07-13 18:08:54
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+        const seconds = String(date.getSeconds()).padStart(2, '0')
+        
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+      } catch (error) {
+        console.error('时间格式化错误:', error)
+        return timeString
+      }
+    }
+
     // 格式化字节数
     const formatBytes = (bytes) => {
       if (bytes === 0) return '0 B'
@@ -341,6 +369,7 @@ export default {
       refreshTopIp,
       refreshRuleMatches,
       formatBytes,
+      formatTime,
       getStateType
     }
   }

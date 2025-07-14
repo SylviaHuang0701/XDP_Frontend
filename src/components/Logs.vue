@@ -27,7 +27,7 @@
       <!-- 表格展示区配置 -->
       <el-table
         :data="logs"  
-        style="width: 100%" 
+        style="width: 100%;min-height: 300px;" 
         :loading="loading"
       >
         <!-- 时间列 -->

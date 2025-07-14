@@ -36,11 +36,6 @@
       <el-table :data="filteredRules" style="width: 100%" v-loading="loading">
         <el-table-column prop="id" label="ID" width="80" sortable />
         <el-table-column prop="desc" label="规则描述" width="180" />
-        <el-table-column prop="src_ip" label="源IP" width="150" />
-        <el-table-column prop="dst_ip" label="目的IP" width="150" />
-        <el-table-column prop="src_port" label="源端口" width="100" />
-        <el-table-column prop="dst_port" label="目标端口" width="100" />
-        <el-table-column prop="domain" label="域名" width="120" />
         <el-table-column prop="protocol" label="协议" width="100">
           <template #default="{ row }">
             <el-tag :type="protocolTagType(row.protocol)">
@@ -55,10 +50,15 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="src_ip" label="源IP" width="150" />
+        <el-table-column prop="dst_ip" label="目的IP" width="150" />
+        <el-table-column prop="src_port" label="源端口" width="100" />
+        <el-table-column prop="dst_port" label="目标端口" width="100" />
+        <el-table-column prop="domain" label="域名" width="120" />
         <!-- 创建时间支持升、降序排列 -->
         <el-table-column prop="created_at" label="创建时间" width="180" sortable>
           <template #default="{ row }">
-            {{ row.created_at }}
+            {{ formatTime(row.created_at) }}
           </template>
         </el-table-column>
         <!-- 
@@ -279,7 +279,7 @@
           <el-table-column prop="desc" label="规则描述" width="320" align="center" />
           <el-table-column prop="created_at" label="创建时间" width="320" align="center">
             <template #default="{ row }">
-              {{ row.created_at }}
+              {{ formatTime(row.created_at) }}
             </template>
           </el-table-column>
           <el-table-column label="操作" width="280" align="center">
@@ -833,6 +833,96 @@ export default {
 
     
     
+    // 格式化时间显示
+    const formatTime = (timeString) => {
+      if (!timeString) return '-'
+      try {
+        const date = new Date(timeString)
+        // 检查日期是否有效
+        if (isNaN(date.getTime())) return timeString
+        
+        // 格式化为: 2025-07-13 18:08:54
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+        const seconds = String(date.getSeconds()).padStart(2, '0')
+        
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+      } catch (error) {
+        console.error('时间格式化错误:', error)
+        return timeString
+      }
+    }
+
+    // 格式化时间显示（带时区）
+    const formatTimeWithTimezone = (timeString) => {
+      if (!timeString) return '-'
+      try {
+        const date = new Date(timeString)
+        // 检查日期是否有效
+        if (isNaN(date.getTime())) return timeString
+        
+        // 格式化为: 2025-07-13 18:08:54 (UTC+8)
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+        const seconds = String(date.getSeconds()).padStart(2, '0')
+        
+        // 获取时区偏移
+        const timezoneOffset = date.getTimezoneOffset()
+        const timezoneHours = Math.abs(Math.floor(timezoneOffset / 60))
+        const timezoneMinutes = Math.abs(timezoneOffset % 60)
+        const timezoneSign = timezoneOffset <= 0 ? '+' : '-'
+        const timezoneString = `UTC${timezoneSign}${String(timezoneHours).padStart(2, '0')}:${String(timezoneMinutes).padStart(2, '0')}`
+        
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} (${timezoneString})`
+      } catch (error) {
+        console.error('时间格式化错误:', error)
+        return timeString
+      }
+    }
+
+    // 格式化相对时间（比如：2小时前、3天前）
+    const formatRelativeTime = (timeString) => {
+      if (!timeString) return '-'
+      try {
+        const date = new Date(timeString)
+        const now = new Date()
+        const diffMs = now - date
+        
+        // 检查日期是否有效
+        if (isNaN(date.getTime()) || diffMs < 0) return formatTime(timeString)
+        
+        const diffSeconds = Math.floor(diffMs / 1000)
+        const diffMinutes = Math.floor(diffSeconds / 60)
+        const diffHours = Math.floor(diffMinutes / 60)
+        const diffDays = Math.floor(diffHours / 24)
+        const diffMonths = Math.floor(diffDays / 30)
+        const diffYears = Math.floor(diffDays / 365)
+        
+        if (diffYears > 0) {
+          return `${diffYears}年前`
+        } else if (diffMonths > 0) {
+          return `${diffMonths}个月前`
+        } else if (diffDays > 0) {
+          return `${diffDays}天前`
+        } else if (diffHours > 0) {
+          return `${diffHours}小时前`
+        } else if (diffMinutes > 0) {
+          return `${diffMinutes}分钟前`
+        } else {
+          return '刚刚'
+        }
+      } catch (error) {
+        console.error('相对时间格式化错误:', error)
+        return formatTime(timeString)
+      }
+    }
+
     // 小黑屋相关
     const blacklistForm = reactive({
       expire_days: '7'
@@ -1286,7 +1376,10 @@ export default {
       handleCurrentChange,
       handleCleanExpired,
       handleForceDelete,
-      fetchExpiredRules
+      fetchExpiredRules,
+      formatTime,
+      formatTimeWithTimezone,
+      formatRelativeTime
     }
   }
 }

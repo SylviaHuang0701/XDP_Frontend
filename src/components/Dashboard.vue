@@ -375,96 +375,6 @@ export default {
       }
     }
 
-
-    // const drawTrafficChart = () => {
-    //   nextTick(() => {
-    //     if (!trafficChart.value) return
-        
-    //     const chart = echarts.init(trafficChart.value)
-    //     chart.setOption({
-    //       tooltip: {
-    //         trigger: 'axis',
-    //         formatter: params => {
-    //           let str = `<div>时间: ${params[0].axisValue}</div>`
-    //           params.forEach(item => {
-    //             if (item.seriesName === '字节数') {
-    //               str += `<div>${item.marker}${item.seriesName}: ${formatBytes(item.data[1])}</div>`
-    //             } else {
-    //               str += `<div>${item.marker}${item.seriesName}: ${item.data[1]}</div>`
-    //             }
-    //           })
-    //           return str
-    //         }
-    //       },
-    //       xAxis: {
-    //         type: 'category',
-    //         data: trafficData.value.map(d => d.timeLabel),
-    //         axisLabel: { 
-    //           rotate: 45,
-    //           // 只在5分钟模式下显示更密集的标签
-    //           interval: timeRange.value === '5min' ? 5 : 0
-    //         }
-    //       },
-    //       yAxis: [
-    //         { type: 'value', name: '字节数' },
-    //         { type: 'value', name: '包数' }
-    //       ],
-    //       series: [
-    //         {
-    //           name: '字节数',
-    //           type: 'line',
-    //           data: trafficData.value.map(d => [d.timeLabel, d.bytes]),
-    //           // 添加标记点配置
-    //           markPoint: timeRange.value === '5min' ? {
-    //             data: [
-    //               { type: 'max', name: '最大值' },
-    //               { type: 'min', name: '最小值' }
-    //             ],
-    //             symbolSize: 40,
-    //             label: {
-    //               formatter: '{b}'
-    //             }
-    //           } : null,
-    //           // 添加标记线配置
-    //           markLine: timeRange.value === '5min' ? {
-    //             data: [
-    //               { type: 'average', name: '平均值' }
-    //             ]
-    //           } : null,
-    //           // 显示数据点
-    //           showSymbol: timeRange.value === '5min',
-    //           symbol: 'circle',
-    //           symbolSize: 6
-    //         },
-    //         {
-    //           name: '包数',
-    //           type: 'line',
-    //           yAxisIndex: 1,
-    //           data: trafficData.value.map(d => [d.timeLabel, d.packets]),
-    //           // 同上配置
-    //           markPoint: timeRange.value === '5min' ? {
-    //             data: [
-    //               { type: 'max', name: '最大值' },
-    //               { type: 'min', name: '最小值' }
-    //             ],
-    //             symbolSize: 40,
-    //             label: {
-    //               formatter: '{b}'
-    //             }
-    //           } : null,
-    //           markLine: timeRange.value === '5min' ? {
-    //             data: [
-    //               { type: 'average', name: '平均值' }
-    //             ]
-    //           } : null,
-    //           showSymbol: timeRange.value === '5min',
-    //           symbol: 'circle',
-    //           symbolSize: 6
-    //         }
-    //       ]
-    //     })
-    //   })
-    // }
     const drawTrafficChart = () => {
       nextTick(() => {
         if (!trafficChart.value) return
@@ -548,11 +458,11 @@ export default {
           yAxis: [
             { 
               type: 'value', 
-              name: '字节数/s',
+              name: '字节数',
               axisLabel: {
                 margin: 15,
                 formatter: function(value) {
-                  return formatBytes(value, true) + '/s';
+                  return formatBytes(value, true);
                 }
               },
               splitLine: {
@@ -593,7 +503,7 @@ export default {
                     label: {
                       show: true,
                       formatter: function(params) {
-                        return formatBytes(avgBytesPerSecond) + '/s';
+                        return formatBytes(avgBytesPerSecond);
                       },
                       color: '#fff',
                       fontSize: 12,

@@ -761,7 +761,7 @@ export default {
 
 .stats-row {
   margin-bottom: 20px;
-  width: 100%;
+  width: 970px;
 }
 
 .stat-card {
